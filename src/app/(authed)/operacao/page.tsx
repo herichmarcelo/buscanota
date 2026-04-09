@@ -17,8 +17,92 @@ type Item = {
   status: "PENDENTE" | "PARCIAL" | "ENTREGUE";
 };
 
+type NotaHeader = {
+  chave_acesso: string;
+  data_emissao?: string | null;
+  cliente_nome?: string | null;
+  cliente_doc?: string | null;
+  cliente_municipio_uf?: string | null;
+  emitente_nome?: string | null;
+  numero?: string | null;
+  serie?: string | null;
+};
+
 function clamp(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
+}
+
+function pick(obj: any, path: string) {
+  return path.split(".").reduce((acc, k) => (acc ? acc[k] : undefined), obj);
+}
+
+function fmtDoc(doc?: string | null) {
+  const d = (doc ?? "").replace(/\D/g, "");
+  if (d.length === 11) return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4");
+  if (d.length === 14) return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+  return doc ?? null;
+}
+
+function fmtDt(iso?: string | null) {
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleString("pt-BR");
+  } catch {
+    return iso;
+  }
+}
+
+function extractHeaderFromNota(nota: any): NotaHeader {
+  const payload = nota?.payload ?? null;
+  const data0 = Array.isArray(payload?.data) ? payload.data[0] : payload?.data ?? null;
+
+  const dest = pick(data0, "destinatario") ?? pick(data0, "nfe.destinatario") ?? pick(data0, "nfe_completa.destinatario");
+  const emit = pick(data0, "emitente") ?? pick(data0, "nfe.emitente") ?? pick(data0, "nfe_completa.emitente");
+
+  const clienteNome =
+    dest?.nome ??
+    dest?.nome_razao_social ??
+    dest?.nome_razao_social_destinatario ??
+    null;
+  const clienteDoc = fmtDoc(dest?.cnpj ?? dest?.cpf ?? dest?.normalizado_cnpj ?? dest?.normalizado_cpf ?? null);
+  const clienteUf = dest?.uf ?? null;
+  const clienteMunicipio = dest?.municipio ?? dest?.normalizado_municipio ?? null;
+
+  const emitNome = emit?.nome ?? emit?.nome_razao_social ?? emit?.nome_fantasia ?? null;
+
+  const numero =
+    String(
+      pick(data0, "numero") ??
+        pick(data0, "nfe.numero") ??
+        pick(data0, "nfe_completa.numero") ??
+        "",
+    ) || null;
+  const serie =
+    String(
+      pick(data0, "serie") ??
+        pick(data0, "nfe.serie") ??
+        pick(data0, "nfe_completa.serie") ??
+        "",
+    ) || null;
+
+  const dataEmissao =
+    nota?.data_emissao ??
+    pick(data0, "data_emissao") ??
+    pick(data0, "nfe.data_emissao") ??
+    pick(data0, "nfe.data_hora_da_emissao") ??
+    null;
+
+  return {
+    chave_acesso: String(nota?.chave_acesso ?? ""),
+    data_emissao: typeof dataEmissao === "string" ? dataEmissao : null,
+    cliente_nome: clienteNome,
+    cliente_doc: clienteDoc,
+    cliente_municipio_uf:
+      clienteMunicipio && clienteUf ? `${clienteMunicipio} - ${clienteUf}` : null,
+    emitente_nome: emitNome,
+    numero,
+    serie,
+  };
 }
 
 export default function OperacaoPage() {
@@ -30,6 +114,7 @@ export default function OperacaoPage() {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [notaHeader, setNotaHeader] = useState<NotaHeader | null>(null);
   const [itens, setItens] = useState<Item[]>([]);
   const lastChaveRef = useRef<string | null>(null);
   const pollTimerRef = useRef<number | null>(null);
@@ -70,6 +155,7 @@ export default function OperacaoPage() {
       setLoading(true);
       setChave(chave44);
       lastChaveRef.current = chave44;
+      setNotaHeader(null);
 
       try {
         // 1) tenta cache no Supabase via processarChaveNfe (retorna rápido se já existir)
@@ -80,6 +166,7 @@ export default function OperacaoPage() {
             res?.itens_nota) as Item[] | undefined;
 
         if (itensNota?.length) {
+          setNotaHeader(extractHeaderFromNota(res));
           setItens(
             itensNota.map((x: any) => ({
               id: String(x.id ?? crypto.randomUUID()),
@@ -136,6 +223,7 @@ export default function OperacaoPage() {
           const status = j?.job?.status ?? null;
           if (status === "OK" && j?.nota?.itens_nota) {
             const items = j.nota.itens_nota as any[];
+            setNotaHeader(extractHeaderFromNota(j.nota));
             setItens(
               items.map((x: any) => ({
                 id: String(x.id ?? crypto.randomUUID()),
@@ -282,6 +370,141 @@ export default function OperacaoPage() {
           </p>
         ) : null}
       </div>
+
+      {notaHeader ? (
+        <div className="rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-sm border-l-8 border-[#009739]">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-1">
+              <div className="text-sm text-gray-600 dark:text-gray-300">
+                Cliente
+              </div>
+              <div className="text-2xl font-extrabold">
+                {notaHeader.cliente_nome ?? "—"}
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-300">
+                {notaHeader.cliente_doc ?? "—"}
+                {notaHeader.cliente_municipio_uf
+                  ? ` • ${notaHeader.cliente_municipio_uf}`
+                  : ""}
+              </div>
+            </div>
+
+            <div className="space-y-1 text-sm text-gray-700 dark:text-gray-200">
+              <div>
+                <span className="opacity-70">NFe:</span>{" "}
+                <strong>
+                  {notaHeader.numero ?? "—"}
+                  {notaHeader.serie ? ` / Série ${notaHeader.serie}` : ""}
+                </strong>
+              </div>
+              <div>
+                <span className="opacity-70">Emissão:</span>{" "}
+                <strong>{fmtDt(notaHeader.data_emissao) ?? "—"}</strong>
+              </div>
+              <div className="break-all">
+                <span className="opacity-70">Chave:</span>{" "}
+                <span className="font-mono">{notaHeader.chave_acesso}</span>
+              </div>
+              {notaHeader.emitente_nome ? (
+                <div>
+                  <span className="opacity-70">Emitente:</span>{" "}
+                  <strong>{notaHeader.emitente_nome}</strong>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Lista linha-a-linha (conferência) */}
+      {itens.length ? (
+        <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <h2 className="text-xl font-bold">Itens da nota (linha a linha)</h2>
+            <div className="text-sm text-gray-600 dark:text-gray-300">
+              Toque nos botões para dar baixa.
+            </div>
+          </div>
+
+          <div className="hidden md:grid grid-cols-[64px_1fr_120px_120px_120px_220px] gap-3 px-6 py-3 text-sm font-bold text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900">
+            <div>Linha</div>
+            <div>Descrição</div>
+            <div>Total</div>
+            <div>Entregue</div>
+            <div>Saldo</div>
+            <div>Ações</div>
+          </div>
+
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            {itens.map((item, idx) => {
+              const saldo = Math.max(0, item.quantidade_total - item.quantidade_entregue);
+              const entregueTudo = item.status === "ENTREGUE";
+              return (
+                <div
+                  key={item.id}
+                  className={[
+                    "px-6 py-5 grid gap-4 items-center",
+                    "md:grid-cols-[64px_1fr_120px_120px_120px_220px]",
+                    "grid-cols-1",
+                    entregueTudo ? "bg-[#009739]/5 dark:bg-[#009739]/10" : "",
+                  ].join(" ")}
+                >
+                  <div className="text-sm font-mono text-gray-500">
+                    {String(idx + 1).padStart(2, "0")}
+                  </div>
+
+                  <div>
+                    <div className="text-lg font-extrabold">{item.descricao}</div>
+                    <div className="text-sm text-gray-600 dark:text-gray-300">
+                      Status:{" "}
+                      <span className="font-bold">
+                        {item.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="text-lg font-bold">
+                    {item.quantidade_total} {item.unidade}
+                  </div>
+                  <div className="text-lg font-bold">
+                    {item.quantidade_entregue} {item.unidade}
+                  </div>
+                  <div className="text-lg font-bold">
+                    {saldo} {item.unidade}
+                  </div>
+
+                  <div className="flex items-center gap-3 justify-start md:justify-end">
+                    <button
+                      type="button"
+                      onClick={() => void step(item, -1)}
+                      className="p-4 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-xl active:scale-95"
+                      aria-label="Diminuir"
+                    >
+                      <Minus className="w-7 h-7" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void step(item, +1)}
+                      className="p-4 bg-green-100 text-[#009739] dark:bg-green-900/30 dark:text-green-300 rounded-xl active:scale-95"
+                      aria-label="Aumentar"
+                    >
+                      <Plus className="w-7 h-7" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void entregarTudo(item)}
+                      className="px-5 py-4 rounded-xl font-extrabold bg-[#009739] text-white active:bg-[#007a2e] active:scale-95 transition-all shadow-sm flex items-center gap-2"
+                    >
+                      <CheckCircle className="w-6 h-6" />
+                      Entregar tudo
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
 
       <div className="space-y-6">
         {itens.map((item) => {
