@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { extractHeaderFromNota, fmtDt } from "@/lib/notaHeader";
+import { useAuth } from "@/components/AuthContext";
 
 type NotaRow = {
   id: string;
@@ -15,6 +16,7 @@ type NotaRow = {
 };
 
 export default function ConferirNotaPage() {
+  const { role } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notas, setNotas] = useState<NotaRow[]>([]);
@@ -45,6 +47,38 @@ export default function ConferirNotaPage() {
     void carregarNotas();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const apagarNota = async (n: NotaRow) => {
+    if (!sb) return;
+    const ok = window.confirm(
+      `Apagar esta nota da base?\n\nChave: ${n.chave_acesso}\n\nEsta ação não pode ser desfeita.`,
+    );
+    if (!ok) return;
+
+    setError(null);
+    setLoading(true);
+    try {
+      const { data } = await sb.auth.getSession();
+      const access = data.session?.access_token;
+      if (!access) throw new Error("Sessão inválida.");
+
+      const r = await fetch(
+        `/api/admin/notas?id=${encodeURIComponent(n.id)}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${access}` },
+        },
+      );
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.error ?? "Falha ao apagar nota.");
+
+      setNotas((prev) => prev.filter((x) => x.id !== n.id));
+    } catch (e: any) {
+      setError(e?.message ?? "Erro ao apagar nota.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -80,52 +114,69 @@ export default function ConferirNotaPage() {
           const border = pend > 0 ? "border-[#FFDF00]" : "border-[#009739]";
 
           return (
-            <Link
+            <div
               key={n.id}
-              href={`/operacao?from=conferir&mode=baixa&chave=${encodeURIComponent(
-                n.chave_acesso,
-              )}`}
               className={[
-                "block rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-sm border-l-8",
+                "rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-sm border-l-8",
                 border,
               ].join(" ")}
             >
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-1">
-                  <div className="text-sm text-gray-600 dark:text-gray-300">
-                    Cliente
+              <Link
+                href={`/operacao?from=conferir&mode=baixa&chave=${encodeURIComponent(
+                  n.chave_acesso,
+                )}`}
+                className="block"
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-1">
+                    <div className="text-sm text-gray-600 dark:text-gray-300">
+                      Cliente
+                    </div>
+                    <div className="text-2xl font-extrabold">
+                      {h.cliente_nome ?? "—"}
+                    </div>
+                    <div className="text-sm text-gray-600 dark:text-gray-300">
+                      {h.cliente_municipio_uf ?? "—"}
+                    </div>
                   </div>
-                  <div className="text-2xl font-extrabold">
-                    {h.cliente_nome ?? "—"}
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-300">
-                    {h.cliente_municipio_uf ?? "—"}
-                  </div>
-                </div>
 
-                <div className="space-y-1 text-sm text-gray-700 dark:text-gray-200">
-                  <div>
-                    <span className="opacity-70">NFe:</span>{" "}
-                    <strong>
-                      {h.numero ?? "—"}
-                      {h.serie ? ` / Série ${h.serie}` : ""}
-                    </strong>
-                  </div>
-                  <div>
-                    <span className="opacity-70">Emissão:</span>{" "}
-                    <strong>{fmtDt(h.data_emissao) ?? "—"}</strong>
-                  </div>
-                  <div className="break-all">
-                    <span className="opacity-70">Chave:</span>{" "}
-                    <span className="font-mono">{n.chave_acesso}</span>
-                  </div>
-                  <div>
-                    <span className="opacity-70">Pendentes:</span>{" "}
-                    <strong>{pend}</strong>
+                  <div className="space-y-1 text-sm text-gray-700 dark:text-gray-200">
+                    <div>
+                      <span className="opacity-70">NFe:</span>{" "}
+                      <strong>
+                        {h.numero ?? "—"}
+                        {h.serie ? ` / Série ${h.serie}` : ""}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="opacity-70">Emissão:</span>{" "}
+                      <strong>{fmtDt(h.data_emissao) ?? "—"}</strong>
+                    </div>
+                    <div className="break-all">
+                      <span className="opacity-70">Chave:</span>{" "}
+                      <span className="font-mono">{n.chave_acesso}</span>
+                    </div>
+                    <div>
+                      <span className="opacity-70">Pendentes:</span>{" "}
+                      <strong>{pend}</strong>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </Link>
+              </Link>
+
+              {role === "superadmin" ? (
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => void apagarNota(n)}
+                    disabled={loading}
+                    className="px-4 py-2 rounded-xl font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 disabled:opacity-60"
+                  >
+                    Apagar
+                  </button>
+                </div>
+              ) : null}
+            </div>
           );
         })}
 

@@ -1,7 +1,12 @@
 "use client";
 
+import { FileDown } from "lucide-react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useAuth } from "@/components/AuthContext";
+import {
+  downloadPdfRelatorioEntregasDia,
+  type ItemRelatorioPdf,
+} from "@/lib/pdfRelatorioEntregas";
 import { useEffect, useMemo, useState } from "react";
 
 type Evento = {
@@ -21,6 +26,23 @@ function formatDt(iso: string) {
   }
 }
 
+/** YYYY-MM-DD no fuso America/São Paulo (relatório “do dia”). */
+function dataCalendarioSaoPaulo(iso: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
+}
+
+function diaPtBrReferencia(iso: string) {
+  const ymd = dataCalendarioSaoPaulo(iso);
+  const [y, m, d] = ymd.split("-");
+  if (!y || !m || !d) return ymd;
+  return `${d}/${m}/${y}`;
+}
+
 export default function RelatoriosPage() {
   const { role } = useAuth();
   const sb = getSupabaseClient();
@@ -28,6 +50,7 @@ export default function RelatoriosPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [eventos, setEventos] = useState<Evento[]>([]);
+  const [pdfChaveLoading, setPdfChaveLoading] = useState<string | null>(null);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Evento[]>();
@@ -70,6 +93,52 @@ export default function RelatoriosPage() {
     void fetchEventos();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const gerarPdfEntregasDoDia = async (chave: string, diaIsoReferencia: string) => {
+    if (!sb) {
+      setError("Supabase não configurado.");
+      return;
+    }
+    const dia = dataCalendarioSaoPaulo(diaIsoReferencia);
+    setPdfChaveLoading(chave);
+    setError(null);
+    try {
+      const { data } = await sb.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) {
+        setError("Sessão expirada. Entre novamente.");
+        return;
+      }
+      const r = await fetch(
+        `/api/relatorio-entregas-dia?chave=${encodeURIComponent(chave)}&dia=${encodeURIComponent(dia)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setError(j?.error ?? "Falha ao montar relatório.");
+        return;
+      }
+      const itens: ItemRelatorioPdf[] = (j.itens ?? []).map((row: any) => ({
+        descricao: String(row.descricao ?? ""),
+        unidade: String(row.unidade ?? ""),
+        quantidade_total: Number(row.quantidade_total ?? 0),
+        quantidade_entregue: Number(row.quantidade_entregue ?? 0),
+        saldo_restante: Number(row.saldo_restante ?? 0),
+        status: String(row.status ?? ""),
+        ultima_retirada_em: row.ultima_retirada_em ?? null,
+      }));
+      downloadPdfRelatorioEntregasDia({
+        notaCapa: j.nota,
+        dia: j.dia,
+        itens,
+        geradoEmIso: new Date().toISOString(),
+      });
+    } catch {
+      setError("Falha de rede ao gerar PDF.");
+    } finally {
+      setPdfChaveLoading(null);
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -135,13 +204,44 @@ export default function RelatoriosPage() {
               </div>
             </div>
 
-            {g.lastEntrega?.payload ? (
-              <div className="mt-4 rounded-2xl bg-[#009739]/10 dark:bg-[#009739]/15 p-4">
-                <div className="text-sm opacity-70">Última ação</div>
-                <div className="text-lg font-bold">
-                  {String(g.lastEntrega.payload?.descricao ?? "Item")} •{" "}
-                  {String(g.lastEntrega.payload?.de ?? "—")} →{" "}
-                  {String(g.lastEntrega.payload?.para ?? "—")}
+            {g.lastEntrega ? (
+              <div className="mt-4 rounded-2xl bg-[#009739]/10 dark:bg-[#009739]/15 p-4 space-y-3">
+                {g.lastEntrega.payload &&
+                (g.lastEntrega.payload.descricao != null ||
+                  g.lastEntrega.payload.de != null ||
+                  g.lastEntrega.payload.para != null) ? (
+                  <div>
+                    <div className="text-sm opacity-70">Última ação</div>
+                    <div className="text-lg font-bold">
+                      {String(g.lastEntrega.payload?.descricao ?? "Item")} •{" "}
+                      {String(g.lastEntrega.payload?.de ?? "—")} →{" "}
+                      {String(g.lastEntrega.payload?.para ?? "—")}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    Gere o PDF com os <strong>itens entregues</strong> (dados da
+                    nota) cuja <strong>última retirada</strong> cai no dia{" "}
+                    <strong>{diaPtBrReferencia(g.lastEntrega.created_at)}</strong>{" "}
+                    (fuso America/São Paulo), para esta chave.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void gerarPdfEntregasDoDia(
+                        g.chave,
+                        g.lastEntrega!.created_at,
+                      )
+                    }
+                    disabled={pdfChaveLoading === g.chave}
+                    className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#009739] px-5 py-3 font-bold text-white shadow-sm transition hover:bg-[#007a2e] disabled:opacity-60"
+                  >
+                    <FileDown className="h-5 w-5" />
+                    {pdfChaveLoading === g.chave
+                      ? "Gerando…"
+                      : "Gerar PDF do dia"}
+                  </button>
                 </div>
               </div>
             ) : null}

@@ -61,11 +61,26 @@ export async function POST(req: Request) {
   // lê o item atual
   const { data: item, error: itemErr } = await admin
     .from("itens_nota")
-    .select("id, quantidade_total, quantidade_entregue, status")
+    .select("id, nota_id, quantidade_total, quantidade_entregue, status")
     .eq("id", itemId)
     .single();
   if (itemErr) {
     return NextResponse.json({ error: itemErr.message }, { status: 500 });
+  }
+
+  const { data: notaPai, error: notaErr } = await admin
+    .from("notas")
+    .select("entrega_fechada")
+    .eq("id", item.nota_id)
+    .single();
+  if (notaErr) {
+    return NextResponse.json({ error: notaErr.message }, { status: 500 });
+  }
+  if (notaPai?.entrega_fechada) {
+    return NextResponse.json(
+      { error: "Entrega fechada: não é possível alterar quantidades." },
+      { status: 403 },
+    );
   }
 
   const total = Number(item.quantidade_total ?? 0);

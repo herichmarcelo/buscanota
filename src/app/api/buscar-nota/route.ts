@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-import {
-  asNumberProduto,
-  extractProdutosFromInfosimplesPayload,
-  normalizeDescricaoProduto,
-} from "@/lib/infosimplesNfeProdutos";
+import { salvarNotaViaMeuDanfe } from "@/lib/salvarNotaMeuDanfe";
 
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as { chave?: string } | null;
@@ -17,26 +13,6 @@ export async function POST(req: Request) {
     );
   }
 
-  const token = process.env.INFOSIMPLES_TOKEN;
-  if (!token) {
-    return NextResponse.json(
-      { error: "INFOSIMPLES_TOKEN não configurado no server." },
-      { status: 500 },
-    );
-  }
-
-  // 1) Consulta Infosimples (pode demorar por RPA/captcha)
-  // IMPORTANTE: a URL "bonita" do catálogo (ex: infosimples.com/consultas/...) NÃO é o endpoint da API.
-  // A API v2 costuma ficar em /api/v2/consultas/<slug>.
-  // Como o slug pode variar (receita-federal/nfe vs receita-federal-nfe vs sefaz/nfe),
-  // tentamos algumas opções comuns e retornamos erro detalhado se nenhuma funcionar.
-  const startUrlCandidates = [
-    "https://api.infosimples.com/api/v2/consultas/receita-federal/nfe",
-    "https://api.infosimples.com/api/v2/consultas/receita-federal-nfe",
-    "https://api.infosimples.com/api/v2/consultas/sefaz/nfe",
-  ] as const;
-
-  // Cache rápido: se já existe no Supabase, devolve sem chamar Infosimples
   const admin = getSupabaseAdmin();
   if (!admin) {
     return NextResponse.json(
@@ -54,156 +30,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: cachedErr.message }, { status: 500 });
   }
   if (cached) {
-    return NextResponse.json({ ok: true, nota: cached, itens: cached.itens_nota ?? [] });
-  }
-
-  async function callStart(startUrl: string) {
-    const resp = await fetch(startUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        token,
-        nfe: chave,
-      }),
+    return NextResponse.json({
+      ok: true,
+      nota: cached,
+      itens: cached.itens_nota ?? [],
     });
-    const json = (await resp.json().catch(() => null)) as any;
-    return { resp, json };
   }
 
-  async function callResult(startUrl: string, id: string) {
-    const url = `${startUrl}/resultado/${encodeURIComponent(id)}`;
-    const resp = await fetch(url);
-    const json = (await resp.json().catch(() => null)) as any;
-    return { resp, json };
-  }
-
-  // start (tenta múltiplos endpoints)
-  let startUrlUsed: string | null = null;
-  let resp: Response | null = null;
-  let json: any = null;
-
-  for (const u of startUrlCandidates) {
-    const r = await callStart(u);
-    resp = r.resp;
-    json = r.json;
-    if (resp.ok && json) {
-      startUrlUsed = u;
-      break;
-    }
-  }
-
-  if (!startUrlUsed || !resp || !json || !resp.ok) {
-    return NextResponse.json(
-      {
-        error: `Falha ao consultar Infosimples (${resp?.status ?? "?"}).`,
-        details: json?.message ?? json?.error ?? null,
-        tried: startUrlCandidates,
-      },
-      { status: 502 },
-    );
-  }
-
-  // fluxo assíncrono: se vier code 202 + id, faz polling por alguns segundos
-  const code = typeof json.code === "number" ? json.code : Number(json.code);
-  if (code === 202 && json.id) {
-    const id = String(json.id);
-    const deadline = Date.now() + 25_000;
-    let last: any = json;
-
-    while (Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 1200));
-      const r2 = await callResult(startUrlUsed, id);
-      resp = r2.resp;
-      json = r2.json;
-      last = json ?? last;
-
-      const c2 = typeof json?.code === "number" ? json.code : Number(json?.code);
-      if (resp.ok && c2 === 200) break;
-      if (resp.ok && c2 && c2 !== 202 && c2 !== 200) {
-        return NextResponse.json(
-          {
-            error: `Infosimples retornou code=${c2}.`,
-            details: json?.message ?? json?.error ?? null,
-          },
-          { status: 502 },
-        );
-      }
-    }
-  }
-
-  const finalCode =
-    typeof json?.code === "number" ? json.code : Number(json?.code);
-  if (!json || (finalCode && finalCode !== 200)) {
-    return NextResponse.json(
-      {
-        error: "Falha no robô da Infosimples (ou ainda processando).",
-        details: json?.message ?? json?.error ?? null,
-        code: json?.code ?? null,
-      },
-      { status: 502 },
-    );
-  }
-
-  const data0 = Array.isArray(json.data) ? json.data[0] : null;
-  const notaCompleta =
-    data0?.nfe_completa ?? data0?.nfe ?? data0 ?? null;
-
-  const dataEmissao =
-    notaCompleta?.nfe?.data_emissao ??
-    notaCompleta?.data_emissao ??
-    null;
-
-  const produtos = extractProdutosFromInfosimplesPayload(json);
-
-  // 2) Salva no Supabase (service role para bypass RLS e permitir cache)
-  const { data: notaRow, error: upsertErr } = await admin
-    .from("notas")
-    .upsert(
-      {
-        chave_acesso: chave,
-        data_emissao: dataEmissao,
-        payload: json,
-      },
-      { onConflict: "chave_acesso" },
-    )
-    .select()
-    .single();
-
-  if (upsertErr) {
-    return NextResponse.json({ error: upsertErr.message }, { status: 500 });
-  }
-
-  // Recria itens (simples e consistente com a origem)
-  await admin.from("itens_nota").delete().eq("nota_id", notaRow.id);
-
-  const itensParaSalvar = (produtos ?? []).map((p) => {
-    const qtd = asNumberProduto(
-      p.quantidade_comercial ?? p.qCom ?? p.qtd ?? p.quantidade,
-    );
-    return {
-      nota_id: notaRow.id,
-      descricao: normalizeDescricaoProduto(p),
-      unidade: String(p.unidade_comercial ?? p.uCom ?? p.unidade ?? "").trim(),
-      quantidade_total: qtd,
-      quantidade_entregue: 0,
-      saldo_restante: qtd,
-      status: "PENDENTE" as const,
-    };
-  });
-
-  if (itensParaSalvar.length) {
-    const { error: itensErr } = await admin.from("itens_nota").insert(itensParaSalvar);
-    if (itensErr) {
-      return NextResponse.json({ error: itensErr.message }, { status: 500 });
-    }
+  const saved = await salvarNotaViaMeuDanfe(admin, chave);
+  if (!saved.ok) {
+    return NextResponse.json({ error: saved.error }, { status: 502 });
   }
 
   return NextResponse.json({
     ok: true,
-    nota: notaRow,
-    itens: itensParaSalvar,
+    nota: saved.nota,
+    itens: saved.nota?.itens_nota ?? [],
   });
 }
-

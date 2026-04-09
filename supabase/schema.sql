@@ -68,6 +68,11 @@ create table if not exists public.notas (
 create index if not exists notas_chave_acesso_idx
   on public.notas (chave_acesso);
 
+-- Fechamento de entrega (bloqueia +/- após conferência final)
+alter table public.notas add column if not exists entrega_fechada boolean not null default false;
+alter table public.notas add column if not exists entrega_fechada_em timestamptz;
+alter table public.notas add column if not exists entrega_fechada_por uuid references auth.users(id) on delete set null;
+
 create table if not exists public.itens_nota (
   id uuid primary key default gen_random_uuid(),
   nota_id uuid not null references public.notas(id) on delete cascade,
@@ -135,7 +140,7 @@ with check (
   )
 );
 
--- 4) Jobs assíncronos (para não travar tablet aguardando Infosimples)
+-- 4) Jobs assíncronos (para não travar tablet aguardando Meu Danfe)
 create table if not exists public.nfe_jobs (
   id uuid primary key default gen_random_uuid(),
   chave_acesso varchar(44) not null unique,
