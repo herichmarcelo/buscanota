@@ -1,5 +1,5 @@
 import { AuthProvider } from "@/components/AuthContext";
-import { Sidebar } from "@/components/Sidebar";
+import { AuthedShell } from "@/components/AuthedShell";
 
 export default function AuthedLayout({
   children,
@@ -8,10 +8,7 @@ export default function AuthedLayout({
 }) {
   return (
     <AuthProvider requireAuth>
-      <div className="min-h-screen flex flex-col sm:flex-row bg-gray-100 dark:bg-gray-900">
-        <Sidebar />
-        <main className="flex-1 p-6">{children}</main>
-      </div>
+      <AuthedShell>{children}</AuthedShell>
     </AuthProvider>
   );
 }

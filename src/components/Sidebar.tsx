@@ -16,16 +16,19 @@ function NavItem({
   href,
   label,
   icon,
+  onNavigate,
 }: {
   href: string;
   label: string;
   icon: React.ReactNode;
+  onNavigate?: () => void;
 }) {
   const pathname = usePathname();
   const active = pathname === href;
   return (
     <Link
       href={href}
+      onClick={onNavigate}
       className={[
         "flex items-center gap-3 rounded-xl px-4 py-4 text-lg font-semibold transition",
         active
@@ -39,7 +42,7 @@ function NavItem({
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { profile, role, signOut } = useAuth();
 
   return (
@@ -61,16 +64,19 @@ export function Sidebar() {
           href="/operacao"
           label="Operação"
           icon={<Truck className="w-6 h-6" />}
+          onNavigate={onNavigate}
         />
         <NavItem
           href="/conferir"
           label="Conferir nota"
           icon={<PackageSearch className="w-6 h-6" />}
+          onNavigate={onNavigate}
         />
         <NavItem
           href="/relatorios"
           label="Relatórios"
           icon={<ClipboardList className="w-6 h-6" />}
+          onNavigate={onNavigate}
         />
 
         {role === "superadmin" ? (
@@ -78,6 +84,7 @@ export function Sidebar() {
             href="/configuracoes"
             label="Configurações"
             icon={<Settings className="w-6 h-6" />}
+            onNavigate={onNavigate}
           />
         ) : null}
       </nav>
