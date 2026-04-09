@@ -10,6 +10,8 @@ type InfosimplesProduto = {
   nome?: string;
   xProd?: string;
   produto?: string;
+  descricao_produto?: string;
+  descricao_completa?: string;
   unidade_comercial?: string;
   quantidade_comercial?: string | number;
   unidade?: string;
@@ -74,6 +76,31 @@ function extractDataEmissao(payload: any): string | null {
   }
 
   return raw;
+}
+
+function normalizeDescricao(p: InfosimplesProduto): string {
+  const candidatesRaw = [
+    p.xProd,
+    p.descricao_completa,
+    p.descricao_produto,
+    p.nome,
+    p.produto,
+    p.descricao,
+  ]
+    .map((x) => (typeof x === "string" ? x.trim() : ""))
+    .filter(Boolean)
+    .map((x) => x.replace(/\s+/g, " "));
+
+  if (!candidatesRaw.length) return "ITEM";
+
+  // Se algum candidato não parece truncado, prioriza o mais longo.
+  const notTruncated = candidatesRaw.filter((x) => !/(\.\.\.|…)$/.test(x));
+  if (notTruncated.length) {
+    return notTruncated.sort((a, b) => b.length - a.length)[0];
+  }
+
+  // Tudo parece truncado: pega o maior mesmo assim.
+  return candidatesRaw.sort((a, b) => b.length - a.length)[0];
 }
 
 async function infosimplesFetchNfe(token: string, chave: string) {
@@ -191,9 +218,7 @@ export async function POST(req: Request) {
     await admin.from("itens_nota").delete().eq("nota_id", notaRow.id);
     const itensParaSalvar = (produtos ?? []).map((p) => ({
       nota_id: notaRow.id,
-      descricao: String(p.descricao ?? p.xProd ?? p.nome ?? p.produto ?? "")
-        .trim()
-        .replace(/\s+/g, " ") || "ITEM",
+      descricao: normalizeDescricao(p),
       unidade: String(p.unidade_comercial ?? p.uCom ?? p.unidade ?? "").trim(),
       quantidade_total: asNumber(
         p.quantidade_comercial ?? p.qCom ?? p.qtd ?? p.quantidade,
