@@ -453,8 +453,10 @@ export default function OperacaoPage() {
                     {String(idx + 1).padStart(2, "0")}
                   </div>
 
-                  <div>
-                    <div className="text-lg font-extrabold">{item.descricao}</div>
+                  <div className="min-w-0">
+                    <div className="text-lg font-extrabold break-words whitespace-normal leading-snug">
+                      {item.descricao}
+                    </div>
                     <div className="text-sm text-gray-600 dark:text-gray-300">
                       Status:{" "}
                       <span className="font-bold">
@@ -518,8 +520,10 @@ export default function OperacaoPage() {
                 entregueTudo ? "border-[#009739]" : "border-[#FFDF00]",
               ].join(" ")}
             >
-              <div className="mb-6">
-                <h3 className="text-2xl font-bold mb-2">{item.descricao}</h3>
+              <div className="mb-6 min-w-0">
+                <h3 className="text-2xl font-bold mb-2 break-words whitespace-normal leading-snug">
+                  {item.descricao}
+                </h3>
                 <p className="text-lg opacity-75">
                   Total da Nota:{" "}
                   <strong>

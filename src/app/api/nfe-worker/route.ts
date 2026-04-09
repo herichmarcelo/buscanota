@@ -7,6 +7,9 @@ export const maxDuration = 60;
 
 type InfosimplesProduto = {
   descricao?: string;
+  nome?: string;
+  xProd?: string;
+  produto?: string;
   unidade_comercial?: string;
   quantidade_comercial?: string | number;
   unidade?: string;
@@ -175,7 +178,9 @@ export async function POST(req: Request) {
     await admin.from("itens_nota").delete().eq("nota_id", notaRow.id);
     const itensParaSalvar = (produtos ?? []).map((p) => ({
       nota_id: notaRow.id,
-      descricao: String(p.descricao ?? "").trim() || "ITEM",
+      descricao: String(p.descricao ?? p.xProd ?? p.nome ?? p.produto ?? "")
+        .trim()
+        .replace(/\s+/g, " ") || "ITEM",
       unidade: String(p.unidade_comercial ?? p.uCom ?? p.unidade ?? "").trim(),
       quantidade_total: asNumber(
         p.quantidade_comercial ?? p.qCom ?? p.qtd ?? p.quantidade,
