@@ -59,8 +59,21 @@ function extractDataEmissao(payload: any): string | null {
     pick(data0, "nfe_completa.nfe.data_hora_da_emissao"),
     pick(data0, "data_emissao"),
   ];
-  const v = candidates.find((x) => typeof x === "string" && x.length) ?? null;
-  return v;
+  const raw = candidates.find((x) => typeof x === "string" && x.length) ?? null;
+  if (!raw) return null;
+
+  // Normaliza formatos comuns retornados pela Infosimples para ISO (timestamptz).
+  // Ex: "16/03/2026 10:10:41-04:00"
+  const brMatch =
+    /^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2})(?::(\d{2}))?([+-]\d{2}:\d{2})?$/.exec(
+      raw,
+    );
+  if (brMatch) {
+    const [, dd, mm, yyyy, HH, MM, SS = "00", tz = "Z"] = brMatch;
+    return `${yyyy}-${mm}-${dd}T${HH}:${MM}:${SS}${tz}`;
+  }
+
+  return raw;
 }
 
 async function infosimplesFetchNfe(token: string, chave: string) {
