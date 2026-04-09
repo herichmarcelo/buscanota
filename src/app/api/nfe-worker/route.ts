@@ -217,6 +217,7 @@ export async function POST(req: Request) {
 
     await admin.from("itens_nota").delete().eq("nota_id", notaRow.id);
     const itensParaSalvar = (produtos ?? []).map((p) => ({
+      // estado inicial: nada entregue, saldo = total
       nota_id: notaRow.id,
       descricao: normalizeDescricao(p),
       unidade: String(p.unidade_comercial ?? p.uCom ?? p.unidade ?? "").trim(),
@@ -224,6 +225,9 @@ export async function POST(req: Request) {
         p.quantidade_comercial ?? p.qCom ?? p.qtd ?? p.quantidade,
       ),
       quantidade_entregue: 0,
+      saldo_restante: asNumber(
+        p.quantidade_comercial ?? p.qCom ?? p.qtd ?? p.quantidade,
+      ),
       status: "PENDENTE",
     }));
     if (itensParaSalvar.length) {
