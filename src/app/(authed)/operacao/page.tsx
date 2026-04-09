@@ -14,6 +14,8 @@ type Item = {
   unidade: string;
   quantidade_total: number;
   quantidade_entregue: number;
+  saldo_restante?: number;
+  ultima_retirada_em?: string | null;
   status: "PENDENTE" | "PARCIAL" | "ENTREGUE";
 };
 
@@ -275,26 +277,98 @@ export default function OperacaoPage() {
   };
 
   const entregarTudo = async (item: Item) => {
+    const before = item.quantidade_entregue;
     atualizarItem(item.id, item.quantidade_total);
+    try {
+      const { data } = await sb!.auth.getSession();
+      const access = data.session?.access_token;
+      if (access) {
+        const r = await fetch("/api/itens-entrega", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${access}`,
+          },
+          body: JSON.stringify({
+            item_id: item.id,
+            quantidade_entregue: item.quantidade_total,
+          }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (r.ok && j?.item) {
+          setItens((prev) =>
+            prev.map((it) =>
+              it.id === item.id
+                ? {
+                    ...it,
+                    quantidade_entregue: Number(j.item.quantidade_entregue ?? it.quantidade_entregue),
+                    status: (j.item.status ?? it.status) as Item["status"],
+                    saldo_restante: Number(j.item.saldo_restante ?? 0),
+                    ultima_retirada_em: j.item.ultima_retirada_em ?? null,
+                  }
+                : it,
+            ),
+          );
+        } else if (!r.ok) {
+          setError(j?.error ?? "Falha ao salvar entrega.");
+        }
+      }
+    } catch {
+      setError("Falha de rede ao salvar entrega.");
+    }
+
     await logEvento("ENTREGA", {
       item_id: item.id,
       descricao: item.descricao,
-      de: item.quantidade_entregue,
+      de: before,
       para: item.quantidade_total,
     });
   };
 
   const step = async (item: Item, delta: number) => {
-    const next = clamp(
-      item.quantidade_entregue + delta,
-      0,
-      item.quantidade_total,
-    );
+    const before = item.quantidade_entregue;
+    const next = clamp(before + delta, 0, item.quantidade_total);
     atualizarItem(item.id, next);
+
+    try {
+      const { data } = await sb!.auth.getSession();
+      const access = data.session?.access_token;
+      if (access) {
+        const r = await fetch("/api/itens-entrega", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${access}`,
+          },
+          body: JSON.stringify({ item_id: item.id, quantidade_entregue: next }),
+        });
+        const j = await r.json().catch(() => ({}));
+        if (r.ok && j?.item) {
+          setItens((prev) =>
+            prev.map((it) =>
+              it.id === item.id
+                ? {
+                    ...it,
+                    quantidade_entregue: Number(j.item.quantidade_entregue ?? it.quantidade_entregue),
+                    status: (j.item.status ?? it.status) as Item["status"],
+                    saldo_restante: Number(j.item.saldo_restante ?? 0),
+                    ultima_retirada_em: j.item.ultima_retirada_em ?? null,
+                  }
+                : it,
+            ),
+          );
+        } else if (!r.ok) {
+          setError(j?.error ?? "Falha ao salvar entrega.");
+        }
+      }
+    } catch {
+      setError("Falha de rede ao salvar entrega.");
+    }
+
     await logEvento("ENTREGA", {
       item_id: item.id,
       descricao: item.descricao,
-      de: item.quantidade_entregue,
+      de: before,
       para: next,
     });
   };

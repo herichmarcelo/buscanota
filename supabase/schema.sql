@@ -75,7 +75,9 @@ create table if not exists public.itens_nota (
   unidade varchar(10),
   quantidade_total numeric not null,
   quantidade_entregue numeric not null default 0,
+  saldo_restante numeric not null default 0,
   status varchar(10) not null default 'PENDENTE' check (status in ('PENDENTE','PARCIAL','ENTREGUE')),
+  ultima_retirada_em timestamptz,
   criado_em timestamptz not null default now()
 );
 
