@@ -1,55 +1,17 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { createClient } from "@supabase/supabase-js";
+import {
+  asNumberProduto,
+  extractProdutosFromInfosimplesPayload,
+  normalizeDescricaoProduto,
+} from "@/lib/infosimplesNfeProdutos";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-type InfosimplesProduto = {
-  descricao?: string;
-  nome?: string;
-  xProd?: string;
-  produto?: string;
-  descricao_produto?: string;
-  descricao_completa?: string;
-  unidade_comercial?: string;
-  quantidade_comercial?: string | number;
-  unidade?: string;
-  quantidade?: string | number;
-  qtd?: string | number;
-  qCom?: string | number;
-  uCom?: string;
-};
-
-function asNumber(v: unknown) {
-  if (typeof v === "number") return v;
-  if (typeof v === "string") {
-    const n = Number(v.replace(",", "."));
-    return Number.isFinite(n) ? n : 0;
-  }
-  return 0;
-}
-
-function firstArray(...vals: any[]): any[] {
-  for (const v of vals) if (Array.isArray(v) && v.length) return v;
-  return [];
-}
-
 function pick(obj: any, path: string) {
   return path.split(".").reduce((acc, k) => (acc ? acc[k] : undefined), obj);
-}
-
-function extractProdutos(payload: any): InfosimplesProduto[] {
-  const data0 = Array.isArray(payload?.data) ? payload.data[0] : payload?.data ?? null;
-  return firstArray(
-    pick(data0, "nfe_completa.produtos"),
-    pick(data0, "nfe_completa.nfe_completa.produtos"),
-    pick(data0, "resumida.produtos"),
-    pick(data0, "nfe.produtos"),
-    pick(data0, "produtos"),
-    pick(payload, "produtos"),
-    pick(payload, "data.produtos"),
-  ) as InfosimplesProduto[];
 }
 
 function extractDataEmissao(payload: any): string | null {
@@ -64,8 +26,6 @@ function extractDataEmissao(payload: any): string | null {
   const raw = candidates.find((x) => typeof x === "string" && x.length) ?? null;
   if (!raw) return null;
 
-  // Normaliza formatos comuns retornados pela Infosimples para ISO (timestamptz).
-  // Ex: "16/03/2026 10:10:41-04:00"
   const brMatch =
     /^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2})(?::(\d{2}))?([+-]\d{2}:\d{2})?$/.exec(
       raw,
@@ -76,31 +36,6 @@ function extractDataEmissao(payload: any): string | null {
   }
 
   return raw;
-}
-
-function normalizeDescricao(p: InfosimplesProduto): string {
-  const candidatesRaw = [
-    p.xProd,
-    p.descricao_completa,
-    p.descricao_produto,
-    p.nome,
-    p.produto,
-    p.descricao,
-  ]
-    .map((x) => (typeof x === "string" ? x.trim() : ""))
-    .filter(Boolean)
-    .map((x) => x.replace(/\s+/g, " "));
-
-  if (!candidatesRaw.length) return "ITEM";
-
-  // Se algum candidato não parece truncado, prioriza o mais longo.
-  const notTruncated = candidatesRaw.filter((x) => !/(\.\.\.|…)$/.test(x));
-  if (notTruncated.length) {
-    return notTruncated.sort((a, b) => b.length - a.length)[0];
-  }
-
-  // Tudo parece truncado: pega o maior mesmo assim.
-  return candidatesRaw.sort((a, b) => b.length - a.length)[0];
 }
 
 async function infosimplesFetchNfe(token: string, chave: string) {
@@ -128,13 +63,11 @@ export async function POST(req: Request) {
   const qsSecret = url.searchParams.get("secret");
   const auth = req.headers.get("authorization") ?? "";
 
-  // Autorização por secret (opcional, útil para cron externo)
   const secret = process.env.NFE_WORKER_SECRET ?? null;
   const okBySecret =
     !!secret &&
     (auth === `Bearer ${secret}` || (qsSecret !== null && qsSecret === secret));
 
-  // Autorização por sessão Supabase (para poder rodar no Vercel Hobby sem cron)
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnon =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
@@ -169,7 +102,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // pega 1 job pendente
   const { data: jobs, error: jobsErr } = await admin
     .from("nfe_jobs")
     .select("*")
@@ -181,7 +113,6 @@ export async function POST(req: Request) {
   const job = jobs?.[0];
   if (!job) return NextResponse.json({ ok: true, processed: 0 });
 
-  // marca como processando
   await admin
     .from("nfe_jobs")
     .update({
@@ -199,7 +130,7 @@ export async function POST(req: Request) {
 
     const json = fetched.json;
     const dataEmissao = extractDataEmissao(json);
-    const produtos = extractProdutos(json);
+    const produtos = extractProdutosFromInfosimplesPayload(json);
 
     const { data: notaRow, error: upsertErr } = await admin
       .from("notas")
@@ -216,20 +147,20 @@ export async function POST(req: Request) {
     if (upsertErr) throw upsertErr;
 
     await admin.from("itens_nota").delete().eq("nota_id", notaRow.id);
-    const itensParaSalvar = (produtos ?? []).map((p) => ({
-      // estado inicial: nada entregue, saldo = total
-      nota_id: notaRow.id,
-      descricao: normalizeDescricao(p),
-      unidade: String(p.unidade_comercial ?? p.uCom ?? p.unidade ?? "").trim(),
-      quantidade_total: asNumber(
+    const itensParaSalvar = (produtos ?? []).map((p) => {
+      const qtd = asNumberProduto(
         p.quantidade_comercial ?? p.qCom ?? p.qtd ?? p.quantidade,
-      ),
-      quantidade_entregue: 0,
-      saldo_restante: asNumber(
-        p.quantidade_comercial ?? p.qCom ?? p.qtd ?? p.quantidade,
-      ),
-      status: "PENDENTE",
-    }));
+      );
+      return {
+        nota_id: notaRow.id,
+        descricao: normalizeDescricaoProduto(p),
+        unidade: String(p.unidade_comercial ?? p.uCom ?? p.unidade ?? "").trim(),
+        quantidade_total: qtd,
+        quantidade_entregue: 0,
+        saldo_restante: qtd,
+        status: "PENDENTE",
+      };
+    });
     if (itensParaSalvar.length) {
       const { error: itensErr } = await admin.from("itens_nota").insert(itensParaSalvar);
       if (itensErr) throw itensErr;
@@ -257,4 +188,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, processed: 1, error: e?.message ?? "Erro" }, { status: 502 });
   }
 }
-

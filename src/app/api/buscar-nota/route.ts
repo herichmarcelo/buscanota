@@ -1,20 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
-
-type InfosimplesProduto = {
-  descricao?: string;
-  unidade_comercial?: string;
-  quantidade_comercial?: string | number;
-};
-
-function asNumber(v: unknown) {
-  if (typeof v === "number") return v;
-  if (typeof v === "string") {
-    const n = Number(v.replace(",", "."));
-    return Number.isFinite(n) ? n : 0;
-  }
-  return 0;
-}
+import {
+  asNumberProduto,
+  extractProdutosFromInfosimplesPayload,
+  normalizeDescricaoProduto,
+} from "@/lib/infosimplesNfeProdutos";
 
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as { chave?: string } | null;
@@ -156,23 +146,16 @@ export async function POST(req: Request) {
     );
   }
 
-  // tenta localizar o payload da nota (varia conforme retorno)
   const data0 = Array.isArray(json.data) ? json.data[0] : null;
   const notaCompleta =
-    data0?.nfe_completa ??
-    data0?.nfe ??
-    data0 ??
-    null;
+    data0?.nfe_completa ?? data0?.nfe ?? data0 ?? null;
 
   const dataEmissao =
     notaCompleta?.nfe?.data_emissao ??
     notaCompleta?.data_emissao ??
     null;
 
-  const produtos: InfosimplesProduto[] =
-    notaCompleta?.produtos ??
-    notaCompleta?.itens ??
-    [];
+  const produtos = extractProdutosFromInfosimplesPayload(json);
 
   // 2) Salva no Supabase (service role para bypass RLS e permitir cache)
   const { data: notaRow, error: upsertErr } = await admin
@@ -195,14 +178,20 @@ export async function POST(req: Request) {
   // Recria itens (simples e consistente com a origem)
   await admin.from("itens_nota").delete().eq("nota_id", notaRow.id);
 
-  const itensParaSalvar = (produtos ?? []).map((p) => ({
-    nota_id: notaRow.id,
-    descricao: String(p.descricao ?? "").trim() || "ITEM",
-    unidade: String(p.unidade_comercial ?? "").trim(),
-    quantidade_total: asNumber(p.quantidade_comercial),
-    quantidade_entregue: 0,
-    status: "PENDENTE",
-  }));
+  const itensParaSalvar = (produtos ?? []).map((p) => {
+    const qtd = asNumberProduto(
+      p.quantidade_comercial ?? p.qCom ?? p.qtd ?? p.quantidade,
+    );
+    return {
+      nota_id: notaRow.id,
+      descricao: normalizeDescricaoProduto(p),
+      unidade: String(p.unidade_comercial ?? p.uCom ?? p.unidade ?? "").trim(),
+      quantidade_total: qtd,
+      quantidade_entregue: 0,
+      saldo_restante: qtd,
+      status: "PENDENTE" as const,
+    };
+  });
 
   if (itensParaSalvar.length) {
     const { error: itensErr } = await admin.from("itens_nota").insert(itensParaSalvar);
