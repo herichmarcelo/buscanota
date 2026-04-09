@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { validateBearerSession } from "@/lib/validateBearerSession";
 
 const DIA_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -44,15 +45,22 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Token ausente." }, { status: 401 });
   }
 
+  const authResult = await validateBearerSession(
+    supabaseUrl,
+    supabaseAnon,
+    token,
+  );
+  if (!authResult.ok) {
+    return NextResponse.json(
+      { error: authResult.error },
+      { status: authResult.status },
+    );
+  }
+
   const sb = createClient(supabaseUrl, supabaseAnon, {
     global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
-
-  const { data: u, error: uerr } = await sb.auth.getUser();
-  if (uerr || !u.user) {
-    return NextResponse.json({ error: "Token inválido." }, { status: 401 });
-  }
 
   const { data: nota, error: notaErr } = await sb
     .from("notas")

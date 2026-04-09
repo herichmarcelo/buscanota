@@ -15,3 +15,43 @@ export function getSupabaseClient() {
   return _client;
 }
 
+/** POST com Bearer; em 401 tenta refresh da sessão e repete uma vez (JWT expirado). */
+export async function postJsonWithAuthRetry(
+  sb: SupabaseClient,
+  url: string,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  let { data } = await sb.auth.getSession();
+  let token: string | undefined = data.session?.access_token;
+  if (!token) {
+    const ref = await sb.auth.refreshSession();
+    token = ref.data.session?.access_token;
+  }
+  if (!token) {
+    return new Response(
+      JSON.stringify({
+        error: "Sessão expirada. Entre novamente na conta.",
+      }),
+      { status: 401, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  const doFetch = (t: string) =>
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${t}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+  let r = await doFetch(token);
+  if (r.status === 401) {
+    const ref = await sb.auth.refreshSession();
+    const t2 = ref.data.session?.access_token;
+    if (t2) r = await doFetch(t2);
+  }
+  return r;
+}
+

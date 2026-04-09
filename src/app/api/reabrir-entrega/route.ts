@@ -4,21 +4,6 @@ import { extractHeaderFromNota } from "@/lib/notaHeader";
 import { validateBearerSession } from "@/lib/validateBearerSession";
 import { isMissingEntregaFechadaColumn } from "@/lib/notaEntregaFechadaColumn";
 
-function mapItensSnapshot(rows: unknown): Array<Record<string, unknown>> {
-  if (!Array.isArray(rows)) return [];
-  return rows.map((row: any) => ({
-    id: row.id ?? null,
-    descricao: String(row.descricao ?? ""),
-    unidade: row.unidade ?? "",
-    quantidade_total: Number(row.quantidade_total ?? 0),
-    quantidade_entregue: Number(row.quantidade_entregue ?? 0),
-    saldo_restante: Number(row.saldo_restante ?? 0),
-    status: String(row.status ?? ""),
-    parcial_confirmada: Boolean(row.parcial_confirmada),
-    ultima_retirada_em: row.ultima_retirada_em ?? null,
-  }));
-}
-
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as
     | { chave_acesso?: string }
@@ -77,52 +62,39 @@ export async function POST(req: Request) {
   let nota: { id: string; entrega_fechada?: boolean } | null = null;
 
   if (rSel.error && isMissingEntregaFechadaColumn(rSel.error.message)) {
-    const r2 = await admin
-      .from("notas")
-      .select("id")
-      .eq("chave_acesso", chave)
-      .maybeSingle();
-    if (r2.error) {
-      return NextResponse.json({ error: r2.error.message }, { status: 500 });
-    }
-    nota = r2.data ? { id: r2.data.id, entrega_fechada: false } : null;
-  } else if (rSel.error) {
-    return NextResponse.json({ error: rSel.error.message }, { status: 500 });
-  } else {
-    nota = rSel.data as { id: string; entrega_fechada?: boolean } | null;
+    return NextResponse.json(
+      { error: "Coluna entrega_fechada ausente. Aplique a migration no Supabase." },
+      { status: 500 },
+    );
   }
+  if (rSel.error) {
+    return NextResponse.json({ error: rSel.error.message }, { status: 500 });
+  }
+  nota = rSel.data as { id: string; entrega_fechada?: boolean } | null;
 
   if (!nota) {
     return NextResponse.json({ error: "Nota não encontrada." }, { status: 404 });
   }
-  if (nota.entrega_fechada) {
+  if (!nota.entrega_fechada) {
     return NextResponse.json(
-      { error: "Esta entrega já está fechada." },
+      { error: "Esta entrega não está fechada." },
       { status: 409 },
     );
   }
 
-  // Congela o estado atual: não altera quantidades entregues (ex.: 2/18 permanece).
-  // Só marca a nota como fechada; /api/itens-entrega passa a recusar qualquer mudança.
   const agora = new Date().toISOString();
 
   const { error: notaUpErr } = await admin
     .from("notas")
     .update({
-      entrega_fechada: true,
-      entrega_fechada_em: agora,
-      entrega_fechada_por: authResult.user.id,
+      entrega_fechada: false,
+      entrega_fechada_em: null,
+      entrega_fechada_por: null,
     })
     .eq("id", nota.id);
 
-  let avisoMigracao: string | null = null;
   if (notaUpErr) {
-    if (isMissingEntregaFechadaColumn(notaUpErr.message)) {
-      avisoMigracao =
-        "Aplique no Supabase o arquivo supabase/migrations/20260409120000_add_entrega_fechada_notas.sql para gravar o fechamento na nota.";
-    } else {
-      return NextResponse.json({ error: notaUpErr.message }, { status: 500 });
-    }
+    return NextResponse.json({ error: notaUpErr.message }, { status: 500 });
   }
 
   const { data: full, error: loadErr } = await admin
@@ -134,12 +106,10 @@ export async function POST(req: Request) {
   if (loadErr) {
     return NextResponse.json({
       ok: true,
-      ...(avisoMigracao ? { aviso_migracao: avisoMigracao } : {}),
-      relatorio_registrado: false,
+      entrega_fechada: false,
     });
   }
 
-  const itensSnap = mapItensSnapshot((full as { itens_nota?: unknown }).itens_nota);
   const notaResumo = extractHeaderFromNota(full);
 
   const { error: evErr } = await admin.from("nfe_eventos").insert({
@@ -147,22 +117,20 @@ export async function POST(req: Request) {
     user_id: authResult.user.id,
     tipo: "ENTREGA",
     payload: {
-      acao: "fechar_entrega",
-      fechado_em: agora,
+      acao: "reabrir_entrega",
+      reaberto_em: agora,
       nota_resumo: notaResumo,
-      itens: itensSnap,
     },
   });
 
   const avisoRelatorio = evErr
-    ? `Entrega fechada, mas o relatório não foi gravado no histórico: ${evErr.message}`
+    ? `Entrega reaberta, mas o evento não foi gravado no histórico: ${evErr.message}`
     : null;
 
   return NextResponse.json({
     ok: true,
     nota: full,
-    relatorio_registrado: !evErr,
-    ...(avisoMigracao ? { aviso_migracao: avisoMigracao } : {}),
+    entrega_fechada: false,
     ...(avisoRelatorio ? { aviso_relatorio: avisoRelatorio } : {}),
   });
 }

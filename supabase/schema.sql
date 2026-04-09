@@ -89,6 +89,9 @@ create table if not exists public.itens_nota (
 create index if not exists itens_nota_nota_id_idx
   on public.itens_nota (nota_id);
 
+alter table public.itens_nota
+  add column if not exists parcial_confirmada boolean not null default false;
+
 -- RLS (opcional, mas recomendado): leitura liberada para usuários autenticados;
 -- escrita (insert/update) apenas superadmin (para evitar edição manual indevida).
 alter table public.notas enable row level security;

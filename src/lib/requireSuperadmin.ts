@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { validateBearerSession } from "@/lib/validateBearerSession";
 
 export async function requireSuperadmin(req: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -13,20 +14,20 @@ export async function requireSuperadmin(req: Request) {
     return { ok: false as const, status: 401, error: "Token ausente." };
   }
 
+  const v = await validateBearerSession(url, anon, token);
+  if (!v.ok) {
+    return { ok: false as const, status: v.status, error: v.error };
+  }
+
   const sb = createClient(url, anon, {
     global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { data: u, error: uerr } = await sb.auth.getUser();
-  if (uerr || !u.user) {
-    return { ok: false as const, status: 401, error: "Token inválido." };
-  }
-
   const { data: profile, error: perr } = await sb
     .from("profiles")
     .select("role")
-    .eq("id", u.user.id)
+    .eq("id", v.user.id)
     .maybeSingle();
 
   if (perr) {
@@ -37,6 +38,6 @@ export async function requireSuperadmin(req: Request) {
     return { ok: false as const, status: 403, error: "Acesso negado." };
   }
 
-  return { ok: true as const, user: u.user };
+  return { ok: true as const, user: v.user };
 }
 

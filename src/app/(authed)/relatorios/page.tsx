@@ -5,8 +5,10 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useAuth } from "@/components/AuthContext";
 import {
   downloadPdfRelatorioEntregasDia,
+  downloadPdfRelatorioFechamento,
   type ItemRelatorioPdf,
 } from "@/lib/pdfRelatorioEntregas";
+import type { NotaHeader } from "@/lib/notaHeader";
 import { useEffect, useMemo, useState } from "react";
 
 type Evento = {
@@ -43,6 +45,19 @@ function diaPtBrReferencia(iso: string) {
   return `${d}/${m}/${y}`;
 }
 
+function mapSnapshotToPdfItens(raw: unknown): ItemRelatorioPdf[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((row: Record<string, unknown>) => ({
+    descricao: String(row.descricao ?? ""),
+    unidade: String(row.unidade ?? ""),
+    quantidade_total: Number(row.quantidade_total ?? 0),
+    quantidade_entregue: Number(row.quantidade_entregue ?? 0),
+    saldo_restante: Number(row.saldo_restante ?? 0),
+    status: String(row.status ?? ""),
+    ultima_retirada_em: (row.ultima_retirada_em as string | null) ?? null,
+  }));
+}
+
 export default function RelatoriosPage() {
   const { role } = useAuth();
   const sb = getSupabaseClient();
@@ -51,6 +66,7 @@ export default function RelatoriosPage() {
   const [error, setError] = useState<string | null>(null);
   const [eventos, setEventos] = useState<Evento[]>([]);
   const [pdfChaveLoading, setPdfChaveLoading] = useState<string | null>(null);
+  const [pdfFechamentoId, setPdfFechamentoId] = useState<string | null>(null);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Evento[]>();
@@ -140,6 +156,30 @@ export default function RelatoriosPage() {
     }
   };
 
+  const gerarPdfFechamento = (
+    chave: string,
+    ev: Evento,
+    capa: NotaHeader | null,
+    itens: ItemRelatorioPdf[],
+  ) => {
+    const fechadoEm =
+      (ev.payload?.fechado_em as string | undefined) ?? ev.created_at;
+    const capaSafe: NotaHeader = capa?.chave_acesso
+      ? capa
+      : { chave_acesso: chave };
+    setPdfFechamentoId(ev.id);
+    try {
+      downloadPdfRelatorioFechamento({
+        capa: capaSafe,
+        itens,
+        fechadoEmIso: fechadoEm,
+        geradoEmIso: new Date().toISOString(),
+      });
+    } finally {
+      setPdfFechamentoId(null);
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div className="rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-sm border-t-4 border-[#009739]">
@@ -148,8 +188,8 @@ export default function RelatoriosPage() {
             <h1 className="text-3xl font-bold">Relatórios</h1>
             <p className="mt-2 text-gray-600 dark:text-gray-300">
               {role === "superadmin"
-                ? "Superadmin vê todas as leituras/entregas."
-                : "Você vê apenas suas leituras/entregas."}
+                ? "Superadmin vê todas as leituras, fechamentos de entrega e PDFs."
+                : "Você vê apenas seus eventos; fechamentos ficam gravados com snapshot dos itens."}
             </p>
           </div>
           <button
@@ -168,7 +208,15 @@ export default function RelatoriosPage() {
       </div>
 
       <div className="grid gap-4">
-        {grouped.map((g) => (
+        {grouped.map((g) => {
+          const fechamentos = g.entregas
+            .filter((e) => e.payload?.acao === "fechar_entrega")
+            .sort(
+              (a, b) =>
+                new Date(b.created_at).getTime() -
+                new Date(a.created_at).getTime(),
+            );
+          return (
           <div
             key={g.chave}
             className="rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-sm border-l-8 border-[#FFDF00]"
@@ -245,13 +293,114 @@ export default function RelatoriosPage() {
                 </div>
               </div>
             ) : null}
+
+            {fechamentos.length > 0 ? (
+              <div className="mt-6 space-y-6">
+                <div className="text-sm font-extrabold uppercase tracking-wide text-[#005c2e] dark:text-[#4ade80]">
+                  Relatórios de fechamento (conferência)
+                </div>
+                {fechamentos.map((ev) => {
+                  const capa = (ev.payload?.nota_resumo ?? null) as NotaHeader | null;
+                  const itensPdf = mapSnapshotToPdfItens(ev.payload?.itens);
+                  const rows = Array.isArray(ev.payload?.itens)
+                    ? (ev.payload.itens as Record<string, unknown>[])
+                    : [];
+                  return (
+                    <div
+                      key={ev.id}
+                      className="rounded-2xl border-2 border-[#005c2e]/40 dark:border-[#4ade80]/30 bg-white dark:bg-gray-900/80 p-4 shadow-inner"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            Fechamento registrado
+                          </div>
+                          <div className="text-lg font-bold">
+                            {formatDt(ev.created_at)}
+                          </div>
+                          <div className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                            {itensPdf.length} item(ns) no snapshot gravado no banco.
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            gerarPdfFechamento(g.chave, ev, capa, itensPdf)
+                          }
+                          disabled={pdfFechamentoId === ev.id}
+                          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#005c2e] px-5 py-3 font-bold text-white shadow-sm transition hover:bg-[#004724] disabled:opacity-60"
+                        >
+                          <FileDown className="h-5 w-5" />
+                          {pdfFechamentoId === ev.id
+                            ? "Gerando…"
+                            : "PDF para conferência"}
+                        </button>
+                      </div>
+                      {rows.length > 0 ? (
+                        <div className="mt-4 overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-700">
+                          <table className="min-w-full text-sm">
+                            <thead className="bg-gray-100 dark:bg-gray-800 text-left">
+                              <tr>
+                                <th className="px-3 py-2 font-bold">#</th>
+                                <th className="px-3 py-2 font-bold">Descrição</th>
+                                <th className="px-3 py-2 font-bold">Un.</th>
+                                <th className="px-3 py-2 font-bold">Total</th>
+                                <th className="px-3 py-2 font-bold">Entregue</th>
+                                <th className="px-3 py-2 font-bold">Saldo</th>
+                                <th className="px-3 py-2 font-bold">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                              {rows.map((row, idx) => (
+                                <tr
+                                  key={String(row.id ?? idx)}
+                                  className="bg-white dark:bg-gray-900"
+                                >
+                                  <td className="px-3 py-2 font-mono text-gray-500">
+                                    {String(idx + 1).padStart(2, "0")}
+                                  </td>
+                                  <td className="px-3 py-2 max-w-[220px] break-words">
+                                    {String(row.descricao ?? "")}
+                                  </td>
+                                  <td className="px-3 py-2 whitespace-nowrap">
+                                    {String(row.unidade ?? "—")}
+                                  </td>
+                                  <td className="px-3 py-2 tabular-nums">
+                                    {String(row.quantidade_total ?? "")}
+                                  </td>
+                                  <td className="px-3 py-2 tabular-nums">
+                                    {String(row.quantidade_entregue ?? "")}
+                                  </td>
+                                  <td className="px-3 py-2 tabular-nums">
+                                    {String(row.saldo_restante ?? "")}
+                                  </td>
+                                  <td className="px-3 py-2 whitespace-nowrap">
+                                    {String(row.status ?? "")}
+                                    {Boolean(row.parcial_confirmada) ? (
+                                      <span className="ml-1 text-xs text-amber-700 dark:text-amber-300">
+                                        (parcial conf.)
+                                      </span>
+                                    ) : null}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
-        ))}
+          );
+        })}
 
         {!grouped.length ? (
           <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 p-8 text-center text-gray-600 dark:text-gray-300 bg-white/60 dark:bg-gray-800/60">
-            Sem eventos ainda. Faça uma leitura/entrega na operação para gerar
-            relatório.
+            Sem eventos ainda. Use Operação para ler a nota e, ao fechar a
+            entrega, o relatório de conferência aparece aqui automaticamente.
           </div>
         ) : null}
       </div>
