@@ -68,6 +68,21 @@ export async function GET(req: Request) {
     .maybeSingle();
   if (jobErr) return NextResponse.json({ error: jobErr.message }, { status: 500 });
 
+  // Se não existe job, ainda pode existir cache (nota já salva).
+  if (!job) {
+    const { data: nota, error: notaErr } = await admin
+      .from("notas")
+      .select("*, itens_nota(*)")
+      .eq("chave_acesso", chave)
+      .maybeSingle();
+    if (notaErr) return NextResponse.json({ error: notaErr.message }, { status: 500 });
+    if (nota) return NextResponse.json({ ok: true, job: { status: "OK" }, nota });
+    return NextResponse.json(
+      { error: "Job não encontrado para esta chave." },
+      { status: 404 },
+    );
+  }
+
   // Se terminou OK, já devolve a nota+itens (pra UI atualizar sem outra chamada)
   if (job?.status === "OK") {
     const { data: nota, error: notaErr } = await admin

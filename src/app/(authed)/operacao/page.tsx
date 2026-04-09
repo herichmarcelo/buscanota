@@ -98,6 +98,19 @@ export default function OperacaoPage() {
         setItens([]);
         await logEvento("LEITURA");
 
+        // Garante que o job existe (evita ficar só em GET/poll sem ter enfileirado nada)
+        const enqueueRes = await fetch("/api/nfe-jobs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chave: chave44 }),
+        });
+        const enqueueJson = await enqueueRes.json().catch(() => ({}));
+        if (!enqueueRes.ok) {
+          throw new Error(
+            enqueueJson?.error ?? "Falha ao enfileirar consulta da NFe.",
+          );
+        }
+
         const poll = async () => {
           if (!lastChaveRef.current) return;
           const chave = lastChaveRef.current;
