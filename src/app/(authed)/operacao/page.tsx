@@ -101,6 +101,18 @@ export default function OperacaoPage() {
         const poll = async () => {
           if (!lastChaveRef.current) return;
           const chave = lastChaveRef.current;
+          // Plano Hobby da Vercel não permite cron por minuto.
+          // Enquanto houver job pendente, a própria tela "cutuca" o worker com o token do Supabase.
+          try {
+            const { data } = await sb!.auth.getSession();
+            const access = data.session?.access_token;
+            if (access) {
+              fetch("/api/nfe-worker", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${access}` },
+              }).catch(() => {});
+            }
+          } catch {}
           const r = await fetch(`/api/nfe-jobs?chave=${encodeURIComponent(chave)}`);
           const j = await r.json().catch(() => ({}));
           if (!r.ok) {

@@ -1,9 +1,4 @@
 {
-  "crons": [
-    {
-      "path": "/api/nfe-worker?secret=$NFE_WORKER_SECRET",
-      "schedule": "*/1 * * * *"
-    }
-  ]
+  "crons": []
 }
 

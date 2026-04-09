@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -40,20 +41,32 @@ async function infosimplesFetchNfe(token: string, chave: string) {
 }
 
 export async function POST(req: Request) {
-  const secret = process.env.NFE_WORKER_SECRET;
-  if (!secret) {
-    return NextResponse.json(
-      { error: "NFE_WORKER_SECRET não configurado no server." },
-      { status: 500 },
-    );
-  }
-
   const url = new URL(req.url);
   const qsSecret = url.searchParams.get("secret");
   const auth = req.headers.get("authorization") ?? "";
-  const okByHeader = auth === `Bearer ${secret}`;
-  const okByQuery = qsSecret === secret;
-  if (!okByHeader && !okByQuery) {
+
+  // Autorização por secret (opcional, útil para cron externo)
+  const secret = process.env.NFE_WORKER_SECRET ?? null;
+  const okBySecret =
+    !!secret &&
+    (auth === `Bearer ${secret}` || (qsSecret !== null && qsSecret === secret));
+
+  // Autorização por sessão Supabase (para poder rodar no Vercel Hobby sem cron)
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnon =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY;
+  const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : null;
+  let okBySupabase = false;
+  if (token && supabaseUrl && supabaseAnon) {
+    const sb = createClient(supabaseUrl, supabaseAnon, {
+      global: { headers: { Authorization: `Bearer ${token}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data, error } = await sb.auth.getUser();
+    okBySupabase = !error && !!data.user;
+  }
+
+  if (!okBySecret && !okBySupabase) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -65,8 +78,8 @@ export async function POST(req: Request) {
     );
   }
 
-  const token = process.env.INFOSIMPLES_TOKEN;
-  if (!token) {
+  const infosimplesToken = process.env.INFOSIMPLES_TOKEN;
+  if (!infosimplesToken) {
     return NextResponse.json(
       { error: "INFOSIMPLES_TOKEN não configurado no server." },
       { status: 500 },
@@ -98,7 +111,7 @@ export async function POST(req: Request) {
 
   try {
     const chave = String(job.chave_acesso);
-    const fetched = await infosimplesFetchNfe(token, chave);
+    const fetched = await infosimplesFetchNfe(infosimplesToken, chave);
     if (!fetched.ok) throw new Error(fetched.error);
 
     const json = fetched.json;
