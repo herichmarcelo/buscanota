@@ -8,6 +8,7 @@ import {
   PackageSearch,
   Settings,
   Truck,
+  X,
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth } from "@/components/AuthContext";
@@ -56,7 +57,19 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             {profile?.nome ?? "Operador"} • {role ?? "—"}
           </div>
         </div>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          {onNavigate ? (
+            <button
+              type="button"
+              onClick={onNavigate}
+              className="sm:hidden p-3 rounded-xl bg-gray-100 dark:bg-gray-800 active:scale-[0.99]"
+              aria-label="Fechar menu"
+            >
+              <X className="w-6 h-6 text-gray-900 dark:text-gray-100" />
+            </button>
+          ) : null}
+          <ThemeToggle />
+        </div>
       </div>
 
       <nav className="p-4 space-y-2">

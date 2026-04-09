@@ -1,7 +1,7 @@
 "use client";
 
 import { Sidebar } from "@/components/Sidebar";
-import { Menu, X } from "lucide-react";
+import { Menu } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export function AuthedShell({ children }: { children: React.ReactNode }) {
@@ -53,16 +53,6 @@ export function AuthedShell({ children }: { children: React.ReactNode }) {
             />
             <div className="absolute left-0 top-0 bottom-0 w-[86vw] max-w-[360px] shadow-2xl">
               <div className="relative h-full">
-                <div className="absolute right-3 top-3 z-10">
-                  <button
-                    type="button"
-                    onClick={() => setOpen(false)}
-                    className="p-3 rounded-xl bg-white/90 dark:bg-gray-900/90 backdrop-blur border border-gray-200 dark:border-gray-800"
-                    aria-label="Fechar"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
                 <Sidebar onNavigate={() => setOpen(false)} />
               </div>
             </div>

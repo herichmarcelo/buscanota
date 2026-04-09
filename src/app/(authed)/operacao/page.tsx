@@ -449,7 +449,7 @@ export default function OperacaoPage() {
                     entregueTudo ? "bg-[#009739]/5 dark:bg-[#009739]/10" : "",
                   ].join(" ")}
                 >
-                  <div className="text-sm font-mono text-gray-500">
+                  <div className="text-sm font-mono text-gray-500 dark:text-gray-400">
                     {String(idx + 1).padStart(2, "0")}
                   </div>
 
@@ -463,13 +463,13 @@ export default function OperacaoPage() {
                     </div>
                   </div>
 
-                  <div className="text-lg font-bold">
+                  <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
                     {item.quantidade_total} {item.unidade}
                   </div>
-                  <div className="text-lg font-bold">
+                  <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
                     {item.quantidade_entregue} {item.unidade}
                   </div>
-                  <div className="text-lg font-bold">
+                  <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
                     {saldo} {item.unidade}
                   </div>
 
