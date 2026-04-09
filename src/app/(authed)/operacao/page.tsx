@@ -508,80 +508,12 @@ export default function OperacaoPage() {
         </div>
       ) : null}
 
-      <div className="space-y-6">
-        {itens.map((item) => {
-          const entregueTudo = item.status === "ENTREGUE";
-          return (
-            <div
-              key={item.id}
-              className={[
-                "rounded-2xl p-6 shadow-md border-l-8",
-                "bg-white dark:bg-gray-800",
-                entregueTudo ? "border-[#009739]" : "border-[#FFDF00]",
-              ].join(" ")}
-            >
-              <div className="mb-6 min-w-0">
-                <h3 className="text-2xl font-bold mb-2 break-words whitespace-normal leading-snug">
-                  {item.descricao}
-                </h3>
-                <p className="text-lg opacity-75">
-                  Total da Nota:{" "}
-                  <strong>
-                    {item.quantidade_total} {item.unidade}
-                  </strong>
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-900 p-2 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => void step(item, -1)}
-                    className="p-6 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 rounded-lg active:scale-95"
-                    aria-label="Diminuir"
-                  >
-                    <Minus className="w-10 h-10" />
-                  </button>
-
-                  <div className="text-center">
-                    <div className="text-5xl font-bold">
-                      {item.quantidade_entregue}
-                    </div>
-                    <div className="text-sm opacity-70">
-                      entregue(s) / {item.quantidade_total}
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => void step(item, +1)}
-                    className="p-6 bg-green-100 text-[#009739] dark:bg-green-900/30 dark:text-green-300 rounded-lg active:scale-95"
-                    aria-label="Aumentar"
-                  >
-                    <Plus className="w-10 h-10" />
-                  </button>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => void entregarTudo(item)}
-                  className="w-full flex items-center justify-center gap-3 py-6 bg-[#009739] text-white rounded-xl text-2xl font-bold active:bg-[#007a2e] active:scale-95 transition-all shadow-lg"
-                >
-                  <CheckCircle className="w-8 h-8" />
-                  Entregar Tudo ({item.quantidade_total})
-                </button>
-              </div>
-            </div>
-          );
-        })}
-
-        {!itens.length ? (
-          <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 p-8 text-center text-gray-600 dark:text-gray-300 bg-white/60 dark:bg-gray-800/60">
-            Nenhum item carregado ainda. Use a pistola, a câmera, ou digite a
-            chave e toque em Buscar.
-          </div>
-        ) : null}
-      </div>
+      {!itens.length ? (
+        <div className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 p-8 text-center text-gray-600 dark:text-gray-300 bg-white/60 dark:bg-gray-800/60">
+          Nenhum item carregado ainda. Use a pistola, a câmera, ou digite a
+          chave e toque em Buscar.
+        </div>
+      ) : null}
     </div>
   );
 }
