@@ -27,7 +27,17 @@ export async function POST(req: Request) {
     .eq("chave_acesso", chave)
     .maybeSingle();
   if (cachedErr) return NextResponse.json({ error: cachedErr.message }, { status: 500 });
-  if (cached?.id) return NextResponse.json({ ok: true, status: "OK", nota_id: cached.id });
+  if (cached?.id) {
+    // Se a nota existe mas não tem itens, força criar job para preencher itens_nota.
+    const { count, error: countErr } = await admin
+      .from("itens_nota")
+      .select("*", { count: "exact", head: true })
+      .eq("nota_id", cached.id);
+    if (countErr) return NextResponse.json({ error: countErr.message }, { status: 500 });
+    if ((count ?? 0) > 0) {
+      return NextResponse.json({ ok: true, status: "OK", nota_id: cached.id });
+    }
+  }
 
   // Cria job (upsert) e retorna id/status.
   const { data: job, error: jobErr } = await admin

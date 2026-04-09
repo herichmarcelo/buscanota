@@ -9,6 +9,11 @@ type InfosimplesProduto = {
   descricao?: string;
   unidade_comercial?: string;
   quantidade_comercial?: string | number;
+  unidade?: string;
+  quantidade?: string | number;
+  qtd?: string | number;
+  qCom?: string | number;
+  uCom?: string;
 };
 
 function asNumber(v: unknown) {
@@ -18,6 +23,41 @@ function asNumber(v: unknown) {
     return Number.isFinite(n) ? n : 0;
   }
   return 0;
+}
+
+function firstArray(...vals: any[]): any[] {
+  for (const v of vals) if (Array.isArray(v) && v.length) return v;
+  return [];
+}
+
+function pick(obj: any, path: string) {
+  return path.split(".").reduce((acc, k) => (acc ? acc[k] : undefined), obj);
+}
+
+function extractProdutos(payload: any): InfosimplesProduto[] {
+  const data0 = Array.isArray(payload?.data) ? payload.data[0] : payload?.data ?? null;
+  return firstArray(
+    pick(data0, "nfe_completa.produtos"),
+    pick(data0, "nfe_completa.nfe_completa.produtos"),
+    pick(data0, "resumida.produtos"),
+    pick(data0, "nfe.produtos"),
+    pick(data0, "produtos"),
+    pick(payload, "produtos"),
+    pick(payload, "data.produtos"),
+  ) as InfosimplesProduto[];
+}
+
+function extractDataEmissao(payload: any): string | null {
+  const data0 = Array.isArray(payload?.data) ? payload.data[0] : payload?.data ?? null;
+  const candidates = [
+    pick(data0, "nfe.data_emissao"),
+    pick(data0, "nfe.data_hora_da_emissao"),
+    pick(data0, "nfe_completa.nfe.data_emissao"),
+    pick(data0, "nfe_completa.nfe.data_hora_da_emissao"),
+    pick(data0, "data_emissao"),
+  ];
+  const v = candidates.find((x) => typeof x === "string" && x.length) ?? null;
+  return v;
 }
 
 async function infosimplesFetchNfe(token: string, chave: string) {
@@ -115,12 +155,8 @@ export async function POST(req: Request) {
     if (!fetched.ok) throw new Error(fetched.error);
 
     const json = fetched.json;
-    const data0 = Array.isArray(json.data) ? json.data[0] : null;
-    const notaCompleta = data0?.nfe_completa ?? data0?.nfe ?? data0 ?? null;
-    const dataEmissao =
-      notaCompleta?.nfe?.data_emissao ?? notaCompleta?.data_emissao ?? null;
-    const produtos: InfosimplesProduto[] =
-      notaCompleta?.produtos ?? notaCompleta?.itens ?? [];
+    const dataEmissao = extractDataEmissao(json);
+    const produtos = extractProdutos(json);
 
     const { data: notaRow, error: upsertErr } = await admin
       .from("notas")
@@ -140,8 +176,10 @@ export async function POST(req: Request) {
     const itensParaSalvar = (produtos ?? []).map((p) => ({
       nota_id: notaRow.id,
       descricao: String(p.descricao ?? "").trim() || "ITEM",
-      unidade: String(p.unidade_comercial ?? "").trim(),
-      quantidade_total: asNumber(p.quantidade_comercial),
+      unidade: String(p.unidade_comercial ?? p.uCom ?? p.unidade ?? "").trim(),
+      quantidade_total: asNumber(
+        p.quantidade_comercial ?? p.qCom ?? p.qtd ?? p.quantidade,
+      ),
       quantidade_entregue: 0,
       status: "PENDENTE",
     }));
