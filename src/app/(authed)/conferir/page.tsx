@@ -132,7 +132,7 @@ export default function ConferirNotaPage() {
                     <div className="text-sm text-gray-600 dark:text-gray-300">
                       Cliente
                     </div>
-                    <div className="text-2xl font-extrabold">
+                    <div className="text-2xl font-extrabold text-gray-900 dark:text-gray-50">
                       {h.cliente_nome ?? "—"}
                     </div>
                     <div className="text-sm text-gray-600 dark:text-gray-300">

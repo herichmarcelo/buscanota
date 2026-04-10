@@ -47,10 +47,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { profile, role, signOut } = useAuth();
 
   return (
-    <aside className="w-full sm:w-[320px] lg:w-[340px] shrink-0 bg-white dark:bg-gray-900 border-b sm:border-b-0 sm:border-r border-gray-200 dark:border-gray-800">
+    <aside className="w-full sm:w-[320px] lg:w-[340px] shrink-0 bg-white dark:bg-gray-900 border-b sm:border-b-0 sm:border-r border-gray-200 dark:border-gray-800 text-gray-900 dark:text-gray-50">
       <div className="p-5 flex items-center justify-between border-b border-gray-200 dark:border-gray-800">
         <div>
-          <div className="text-xl font-extrabold tracking-tight">
+          <div className="text-xl font-extrabold tracking-tight text-gray-900 dark:text-gray-50">
             Copagril Operação
           </div>
           <div className="text-sm text-gray-600 dark:text-gray-300">

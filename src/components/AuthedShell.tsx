@@ -17,7 +17,7 @@ export function AuthedShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-50">
       {/* Mobile top bar */}
       <div className="sm:hidden sticky top-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-200 dark:border-gray-800">
         <div className="px-4 py-3 flex items-center justify-between">
@@ -27,9 +27,9 @@ export function AuthedShell({ children }: { children: React.ReactNode }) {
             className="p-3 rounded-xl bg-gray-100 dark:bg-gray-800 active:scale-[0.99]"
             aria-label="Abrir menu"
           >
-            <Menu className="w-7 h-7" />
+            <Menu className="w-7 h-7 text-gray-900 dark:text-gray-50" />
           </button>
-          <div className="text-lg font-extrabold tracking-tight">
+          <div className="text-lg font-extrabold tracking-tight text-gray-900 dark:text-gray-50">
             Copagril Operação
           </div>
           <div className="w-[52px]" />

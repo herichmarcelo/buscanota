@@ -510,7 +510,7 @@ export function OperacaoClient({
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-4 md:space-y-6 px-3 sm:px-4 md:px-0 pb-6 md:pb-0">
+    <div className="max-w-5xl mx-auto space-y-4 md:space-y-6 px-3 sm:px-4 md:px-0 pb-6 md:pb-0 text-gray-900 dark:text-gray-50">
       <ScannerListener onScan={carregarNota} enabled={!cameraOpen && !loading} />
 
       <CameraModal
@@ -679,7 +679,7 @@ export function OperacaoClient({
               <div className="text-xs md:text-sm font-semibold uppercase tracking-wide text-[#005c2e] dark:text-[#4ade80]">
                 Cliente
               </div>
-              <div className="text-xl md:text-2xl font-extrabold leading-snug break-words">
+              <div className="text-xl md:text-2xl font-extrabold leading-snug break-words text-gray-900 dark:text-gray-50">
                 {notaHeader.cliente_nome ?? "—"}
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-300">
