@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { Camera, CheckCircle, Minus, Plus, Printer } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { CameraModal } from "@/components/CameraModal";
 import { ScannerListener } from "@/components/ScannerListener";
 import { processarChaveNfe } from "@/lib/processarChaveNfe";
@@ -49,6 +56,17 @@ function linhaTotalmenteEntregue(item: Item): boolean {
   const t = item.quantidade_total;
   if (t > 0 && item.quantidade_entregue >= t) return true;
   return false;
+}
+
+function statusChipClass(status: Item["status"]) {
+  switch (status) {
+    case "ENTREGUE":
+      return "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/45 dark:text-emerald-200";
+    case "PARCIAL":
+      return "bg-amber-100 text-amber-950 dark:bg-amber-900/40 dark:text-amber-100";
+    default:
+      return "bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100";
+  }
 }
 
 export function OperacaoClient({
@@ -492,7 +510,7 @@ export function OperacaoClient({
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-5xl mx-auto space-y-4 md:space-y-6 px-3 sm:px-4 md:px-0 pb-6 md:pb-0">
       <ScannerListener onScan={carregarNota} enabled={!cameraOpen && !loading} />
 
       <CameraModal
@@ -505,9 +523,11 @@ export function OperacaoClient({
         }}
       />
 
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-sm border-t-4 border-[#009739]">
+      <div className="bg-white dark:bg-gray-800 rounded-b-3xl md:rounded-2xl p-4 shadow-sm border-t-4 border-[#009739]">
         <div className="space-y-1 mb-4">
-          <h1 className="text-3xl font-bold">Operação</h1>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+            Operação
+          </h1>
           <p className="text-sm text-gray-600 dark:text-gray-300">
             {itens.length
               ? `${itens.length} item(ns) • ${pendentes} pendente(s)${
@@ -518,22 +538,22 @@ export function OperacaoClient({
         </div>
 
         {from === "conferir" ? (
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="mb-4 flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
             <Link
               href="/conferir"
-              className="inline-flex items-center rounded-xl px-4 py-2 font-bold bg-gray-100 dark:bg-gray-900"
+              className="inline-flex w-full md:w-auto items-center justify-center rounded-xl px-4 py-3 md:py-2 font-bold bg-gray-100 dark:bg-gray-900"
             >
               ← Voltar para Conferir nota
             </Link>
             {allowEntrega && itens.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-col w-full gap-2 md:w-auto md:flex-row md:flex-wrap md:items-center">
                 {!entregaFechada ? (
                   <button
                     type="button"
                     onClick={() => void fecharEntrega()}
                     disabled={fecharEntregaLoading}
                     className={[
-                      "inline-flex items-center justify-center rounded-xl px-5 py-2 font-extrabold text-white transition",
+                      "inline-flex w-full md:w-auto items-center justify-center rounded-xl px-5 py-3 md:py-2 font-extrabold text-white transition",
                       fecharEntregaLoading
                         ? "bg-gray-500"
                         : "bg-[#005c2e] hover:bg-[#004724] active:scale-[0.98]",
@@ -547,7 +567,7 @@ export function OperacaoClient({
                     onClick={() => void reabrirEntrega()}
                     disabled={reabrirEntregaLoading}
                     className={[
-                      "inline-flex items-center justify-center rounded-xl px-5 py-2 font-extrabold text-white transition",
+                      "inline-flex w-full md:w-auto items-center justify-center rounded-xl px-5 py-3 md:py-2 font-extrabold text-white transition",
                       reabrirEntregaLoading
                         ? "bg-gray-500"
                         : "bg-amber-600 hover:bg-amber-700 active:scale-[0.98] dark:bg-amber-700 dark:hover:bg-amber-600",
@@ -566,7 +586,7 @@ export function OperacaoClient({
                       : "Registre ao menos uma entrega para imprimir"
                   }
                   className={[
-                    "inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2 font-extrabold transition",
+                    "inline-flex w-full md:w-auto items-center justify-center gap-2 rounded-xl px-5 py-3 md:py-2 font-extrabold transition",
                     temAlgumaEntrega && notaHeader
                       ? "border-2 border-[#009739] bg-white text-[#009739] hover:bg-[#009739]/10 dark:bg-gray-900 dark:hover:bg-[#009739]/20"
                       : "cursor-not-allowed border-2 border-gray-300 text-gray-400 dark:border-gray-600",
@@ -653,13 +673,13 @@ export function OperacaoClient({
       </div>
 
       {notaHeader ? (
-        <div className="rounded-2xl bg-white dark:bg-gray-800 p-6 shadow-sm border-l-8 border-[#009739]">
+        <div className="rounded-2xl bg-white dark:bg-gray-800 p-4 md:p-6 shadow-sm border-l-4 md:border-l-8 border-[#009739]">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="space-y-1">
-              <div className="text-sm text-gray-600 dark:text-gray-300">
+            <div className="space-y-1 min-w-0">
+              <div className="text-xs md:text-sm font-semibold uppercase tracking-wide text-[#005c2e] dark:text-[#4ade80]">
                 Cliente
               </div>
-              <div className="text-2xl font-extrabold">
+              <div className="text-xl md:text-2xl font-extrabold leading-snug break-words">
                 {notaHeader.cliente_nome ?? "—"}
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-300">
@@ -698,8 +718,8 @@ export function OperacaoClient({
       ) : null}
 
       {itens.length ? (
-        <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-sm overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="md:rounded-2xl md:bg-white dark:md:bg-gray-800 md:shadow-sm md:overflow-hidden md:border md:border-gray-200/80 dark:md:border-gray-700">
+          <div className="hidden md:flex px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-xl font-bold">Itens da nota (linha a linha)</h2>
             <div className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
               {allowEntrega ? (
@@ -718,6 +738,23 @@ export function OperacaoClient({
             </div>
           </div>
 
+          <div className="md:hidden px-0 pb-1 pt-2">
+            <h2 className="text-lg font-black tracking-tight text-gray-900 dark:text-gray-50">
+              Itens da nota
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 leading-relaxed">
+              {allowEntrega
+                ? "Cada produto em um cartão. Use saída rápida, +/− ou o botão principal."
+                : "Conferência somente leitura — baixa em Conferir nota."}
+            </p>
+            {temLinhasCongeladasEMoveis && !entregaBloqueada && allowEntrega ? (
+              <p className="text-[11px] text-amber-800 dark:text-amber-200 font-semibold mt-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 px-2.5 py-2">
+                Cartões com faixa verde: já totalmente entregues. Os demais aceitam
+                baixa.
+              </p>
+            ) : null}
+          </div>
+
           <div
             className={`hidden md:grid ${
               allowEntrega
@@ -733,7 +770,7 @@ export function OperacaoClient({
             {allowEntrega ? <div>Ações</div> : null}
           </div>
 
-          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+          <div className="space-y-3 md:space-y-0 md:divide-y md:divide-gray-200 dark:md:divide-gray-700">
             {itens.map((item, idx) => {
               const saldo = Math.max(
                 0,
@@ -748,17 +785,246 @@ export function OperacaoClient({
               const acoesEmDuasLinhas =
                 item.status === "PARCIAL" && Boolean(item.parcial_confirmada);
               return (
-                <div
-                  key={item.id}
-                  className={[
-                    "px-6 py-5 grid gap-4 items-center",
-                    allowEntrega
-                      ? "md:grid-cols-[4rem_minmax(0,1fr)_5.5rem_5.5rem_minmax(11.5rem,13rem)_minmax(18rem,1fr)]"
-                      : "md:grid-cols-[64px_1fr_120px_120px_120px]",
-                    "grid-cols-1",
-                    entregueTudo ? "bg-[#009739]/5 dark:bg-[#009739]/10" : "",
-                  ].join(" ")}
-                >
+                <Fragment key={item.id}>
+                  <div
+                    className={[
+                      "md:hidden rounded-2xl border border-gray-200/90 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-md p-4 space-y-4",
+                      entregueTudo && allowEntrega
+                        ? "ring-2 ring-[#009739]/25 dark:ring-[#009739]/30"
+                        : "",
+                    ].join(" ")}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="inline-flex items-center justify-center min-w-[2.25rem] h-8 rounded-xl bg-gray-100 dark:bg-gray-800 text-xs font-mono font-bold text-gray-600 dark:text-gray-300">
+                        {String(idx + 1).padStart(2, "0")}
+                      </span>
+                      <span
+                        className={`text-xs font-extrabold uppercase tracking-wide px-3 py-1 rounded-full ${statusChipClass(item.status)}`}
+                      >
+                        {item.status}
+                      </span>
+                    </div>
+                    <h3 className="text-[17px] font-extrabold leading-snug text-gray-900 dark:text-gray-50 pr-1">
+                      {item.descricao}
+                    </h3>
+                    <div className="grid grid-cols-3 gap-2 rounded-2xl bg-gray-50 dark:bg-gray-800/90 p-3 ring-1 ring-gray-200/60 dark:ring-gray-700/80">
+                      <div className="text-center min-w-0">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                          Total
+                        </div>
+                        <div className="text-base font-black tabular-nums text-[#005c2e] dark:text-emerald-400 truncate">
+                          {item.quantidade_total}
+                          <span className="text-[11px] font-bold ml-0.5 opacity-90">
+                            {item.unidade}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-center min-w-0 border-x border-gray-200/80 dark:border-gray-600/50">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                          Entregue
+                        </div>
+                        <div className="text-base font-black tabular-nums text-gray-900 dark:text-gray-100 truncate">
+                          {item.quantidade_entregue}
+                          <span className="text-[11px] font-bold ml-0.5 opacity-90">
+                            {item.unidade}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-center min-w-0">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                          Saldo
+                        </div>
+                        <div className="text-base font-black tabular-nums text-amber-700 dark:text-amber-300 truncate">
+                          {saldo}
+                          <span className="text-[11px] font-bold ml-0.5 opacity-90">
+                            {item.unidade}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    {entregueTudo && allowEntrega ? (
+                      <p className="text-center text-xs font-semibold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl py-2.5 px-3">
+                        Totalmente entregue — linha travada nesta etapa.
+                      </p>
+                    ) : null}
+                    {allowEntrega && entregaBloqueada ? (
+                      <p className="text-center text-xs font-medium text-amber-900 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/30 rounded-xl py-2.5 px-3">
+                        Entrega fechada. Toque em <strong>Reabrir entrega</strong>{" "}
+                        no topo para continuar.
+                      </p>
+                    ) : null}
+                    {!allowEntrega ? (
+                      <p className="text-center text-[11px] text-gray-500 dark:text-gray-400">
+                        Somente conferência — baixa em &quot;Conferir nota&quot;.
+                      </p>
+                    ) : null}
+                    {allowEntrega &&
+                    !entregaBloqueada &&
+                    !linhaTotalmenteEntregue(item) &&
+                    saldoInt > 0 ? (
+                      <div className="rounded-2xl border-2 border-[#009739]/35 dark:border-[#4ade80]/35 bg-white dark:bg-gray-950 p-3 space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-extrabold uppercase text-[#005c2e] dark:text-[#4ade80]">
+                            Saída rápida
+                          </span>
+                          <span className="text-sm font-black tabular-nums text-gray-900 dark:text-gray-100">
+                            máx. {saldo} {item.unidade}
+                          </span>
+                        </div>
+                        {saldoInt <= 200 ? (
+                          <select
+                            className="w-full min-h-[52px] rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 px-3 text-base font-bold text-gray-900 dark:text-gray-100"
+                            aria-label={`Quantidade a retirar: 1 a ${saldoInt} ${item.unidade}`}
+                            defaultValue=""
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              e.target.value = "";
+                              if (!v) return;
+                              void entregarQuantidadeDoSaldo(item, Number(v));
+                            }}
+                          >
+                            <option value="" disabled>
+                              Escolha a quantidade…
+                            </option>
+                            {Array.from({ length: saldoInt }, (_, i) => (
+                              <option key={i + 1} value={String(i + 1)}>
+                                Retirar {i + 1} {item.unidade}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="flex flex-col gap-2">
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              min={1}
+                              max={saldoInt}
+                              step={1}
+                              id={`saldo-qty-m-${item.id}`}
+                              placeholder={`1 a ${saldoInt}`}
+                              aria-label={`Quantidade (1 a ${saldoInt})`}
+                              className="w-full min-h-[52px] rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 px-3 text-center text-base font-bold"
+                              onKeyDown={(e) => {
+                                if (e.key !== "Enter") return;
+                                const el = e.currentTarget;
+                                void entregarQuantidadeDoSaldo(
+                                  item,
+                                  Number(el.value),
+                                );
+                                el.value = "";
+                              }}
+                            />
+                            <button
+                              type="button"
+                              className="min-h-[48px] rounded-xl bg-[#009739] text-white text-sm font-extrabold active:scale-[0.98]"
+                              onClick={() => {
+                                const el = document.getElementById(
+                                  `saldo-qty-m-${item.id}`,
+                                ) as HTMLInputElement | null;
+                                if (!el) return;
+                                void entregarQuantidadeDoSaldo(
+                                  item,
+                                  Number(el.value),
+                                );
+                                el.value = "";
+                              }}
+                            >
+                              Confirmar quantidade
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                    {allowEntrega && !entregaBloqueada ? (
+                      <div className="space-y-2 pt-1">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-center text-gray-500 dark:text-gray-400">
+                          Ajuste fino (uma unidade)
+                        </p>
+                        <div className="flex gap-3">
+                          <button
+                            type="button"
+                            onClick={() => void step(item, -1)}
+                            disabled={bloqueiaMenos}
+                            className={[
+                              "flex-1 h-14 rounded-2xl flex items-center justify-center active:scale-[0.98] transition-transform",
+                              bloqueiaMenos
+                                ? "bg-gray-100 text-gray-400 dark:bg-gray-800"
+                                : "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border-2 border-red-200/80 dark:border-red-900/50",
+                            ].join(" ")}
+                            aria-label="Diminuir um"
+                          >
+                            <Minus className="w-7 h-7" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void step(item, +1)}
+                            disabled={
+                              entregaBloqueada || linhaTotalmenteEntregue(item)
+                            }
+                            className={[
+                              "flex-1 h-14 rounded-2xl flex items-center justify-center active:scale-[0.98] transition-transform",
+                              entregaBloqueada || linhaTotalmenteEntregue(item)
+                                ? "bg-gray-100 text-gray-400 dark:bg-gray-800"
+                                : "bg-emerald-50 text-[#009739] dark:bg-emerald-950/40 dark:text-emerald-300 border-2 border-emerald-200/80 dark:border-emerald-900/50",
+                            ].join(" ")}
+                            aria-label="Aumentar um"
+                          >
+                            <Plus className="w-7 h-7" />
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (entregaBloqueada) return;
+                            if (item.status === "PENDENTE")
+                              void entregarTudo(item);
+                            else if (
+                              item.status === "PARCIAL" &&
+                              !item.parcial_confirmada
+                            )
+                              void confirmarParcialItem(item);
+                          }}
+                          disabled={
+                            entregaBloqueada ||
+                            linhaTotalmenteEntregue(item) ||
+                            item.status === "ENTREGUE" ||
+                            (item.status === "PARCIAL" &&
+                              Boolean(item.parcial_confirmada))
+                          }
+                          className={[
+                            "w-full min-h-[52px] rounded-2xl font-extrabold text-base flex items-center justify-center gap-2 shadow-sm active:scale-[0.99]",
+                            entregaBloqueada
+                              ? "bg-gray-200 text-gray-500 dark:bg-gray-700"
+                              : item.status === "PENDENTE"
+                                ? "bg-[#009739] text-white"
+                                : item.status === "PARCIAL" &&
+                                    !item.parcial_confirmada
+                                  ? "bg-amber-400 text-gray-900 dark:bg-amber-500 dark:text-white"
+                                  : "bg-gray-200 text-gray-500 dark:bg-gray-700",
+                          ].join(" ")}
+                        >
+                          <CheckCircle className="w-6 h-6 shrink-0" />
+                          {item.status === "PENDENTE"
+                            ? "Entregar tudo"
+                            : item.status === "PARCIAL"
+                              ? item.parcial_confirmada
+                                ? "Parcial confirmada"
+                                : "Entrega parcial"
+                              : "Entregue"}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div
+                    className={[
+                      "hidden md:grid px-6 py-5 gap-4 items-center",
+                      allowEntrega
+                        ? "grid-cols-[4rem_minmax(0,1fr)_5.5rem_5.5rem_minmax(11.5rem,13rem)_minmax(18rem,1fr)]"
+                        : "grid-cols-[64px_1fr_120px_120px_120px]",
+                      entregueTudo ? "bg-[#009739]/5 dark:bg-[#009739]/10" : "",
+                    ].join(" ")}
+                  >
                   <div className="text-sm font-mono text-gray-500 dark:text-gray-400">
                     {String(idx + 1).padStart(2, "0")}
                   </div>
@@ -786,23 +1052,21 @@ export function OperacaoClient({
                       <div
                         className={[
                           "rounded-2xl border-2 border-[#009739]/35 dark:border-[#4ade80]/40",
-                          "bg-white dark:bg-gray-900 shadow-sm",
-                          "p-3 w-full max-md:max-w-[11.5rem] max-md:mx-auto md:max-w-full min-w-0",
-                          "max-md:aspect-square max-md:flex max-md:flex-col max-md:justify-between max-md:gap-2",
+                          "bg-white dark:bg-gray-900 shadow-sm p-3 w-full max-w-full min-w-0",
                           "touch-manipulation",
                         ].join(" ")}
                       >
-                        <div className="text-center max-md:pt-0.5">
+                        <div className="text-center">
                           <div className="text-[10px] font-extrabold uppercase tracking-wide text-[#005c2e] dark:text-[#4ade80]">
                             Saldo
                           </div>
-                          <div className="text-xl md:text-lg font-black tabular-nums text-gray-900 dark:text-gray-100 leading-tight">
+                          <div className="text-lg font-black tabular-nums text-gray-900 dark:text-gray-100 leading-tight">
                             {saldo} {item.unidade}
                           </div>
                         </div>
                         {saldoInt <= 200 ? (
                           <select
-                            className="w-full min-h-[48px] md:min-h-[40px] rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 px-3 py-2.5 text-base md:text-sm font-bold text-gray-900 dark:text-gray-100"
+                            className="w-full min-h-[40px] mt-2 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 px-3 py-2 text-sm font-bold text-gray-900 dark:text-gray-100"
                             aria-label={`Quantidade a retirar do saldo: de 1 a ${saldoInt} ${item.unidade}`}
                             defaultValue=""
                             onChange={(e) => {
@@ -814,7 +1078,7 @@ export function OperacaoClient({
                             }}
                           >
                             <option value="" disabled>
-                              Toque: qtd a sair
+                              Qtd. a retirar…
                             </option>
                             {Array.from({ length: saldoInt }, (_, i) => (
                               <option key={i + 1} value={String(i + 1)}>
@@ -833,7 +1097,7 @@ export function OperacaoClient({
                               id={`saldo-qty-${item.id}`}
                               placeholder={`1–${saldoInt}`}
                               aria-label={`Quantidade a retirar do saldo (1 a ${saldoInt})`}
-                              className="w-full min-h-[48px] md:min-h-[40px] rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 px-3 text-center text-base md:text-sm font-bold text-gray-900 dark:text-gray-100 placeholder:font-normal"
+                              className="w-full min-h-[40px] mt-2 rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 px-3 text-center text-sm font-bold text-gray-900 dark:text-gray-100 placeholder:font-normal"
                               onKeyDown={(e) => {
                                 if (e.key !== "Enter") return;
                                 const el = e.currentTarget;
@@ -846,7 +1110,7 @@ export function OperacaoClient({
                             />
                             <button
                               type="button"
-                              className="min-h-[44px] md:min-h-[36px] rounded-xl bg-[#009739] text-white text-sm font-extrabold active:scale-[0.98]"
+                              className="min-h-[36px] rounded-xl bg-[#009739] text-white text-sm font-extrabold active:scale-[0.98]"
                               onClick={() => {
                                 const el = document.getElementById(
                                   `saldo-qty-${item.id}`,
@@ -979,6 +1243,7 @@ export function OperacaoClient({
                     </div>
                   ) : null}
                 </div>
+                </Fragment>
               );
             })}
           </div>
